@@ -2,6 +2,7 @@
 #include "CandleBuilder.hpp"
 #include "Backtester.hpp"
 #include "DecisionLogger.hpp"
+#include "PerformanceMetrics.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -39,11 +40,23 @@ int main(int argc, char* argv[]) {
         auto end = std::chrono::high_resolution_clock::now();
         auto micros = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
+        PerformanceMetrics metrics = PerformanceAnalyzer::analyze(
+            backtester.decisions(),
+            backtester.trades(),
+            backtester.equityCurve()
+        );
+
         std::cout << "TradeGuard Engine completed successfully.\n";
         std::cout << "Ticks loaded: " << ticks.size() << "\n";
         std::cout << "Candles built: " << candles.size() << "\n";
-        std::cout << "Decisions logged: " << backtester.decisions().size() << "\n";
-        std::cout << "Trades executed: " << backtester.trades().size() << "\n";
+        std::cout << "Decisions logged: " << metrics.totalDecisions << "\n";
+        std::cout << "Accepted trades: " << metrics.acceptedTrades << "\n";
+        std::cout << "Rejected setups: " << metrics.rejectedSetups << "\n";
+        std::cout << "Trades executed: " << metrics.executedTrades << "\n";
+        std::cout << "Ending equity: $" << metrics.endingEquity << "\n";
+        std::cout << "Total PnL: $" << metrics.totalPnl << "\n";
+        std::cout << "Win rate: " << metrics.winRate << "%\n";
+        std::cout << "Max drawdown: " << metrics.maxDrawdown << "%\n";
         std::cout << "Runtime: " << micros << " microseconds\n";
         std::cout << "Output written to: " << outputDir << "\n";
 
