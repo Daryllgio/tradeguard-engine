@@ -1,0 +1,41 @@
+name: TradeGuard Engine CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ python3 python3-pip
+
+      - name: Configure CMake
+        run: cmake -S cpp_engine -B build
+
+      - name: Build C++ engine
+        run: cmake --build build
+
+      - name: Run C++ unit tests
+        run: ./build/tradeguard_tests
+
+      - name: Generate sample market data
+        run: python3 python_analytics/generate_sample_data.py
+
+      - name: Run TradeGuard Engine
+        run: ./build/tradeguard data/sample_ticks.csv output config/risk_config.json
+
+      - name: Install Python analytics dependencies
+        run: pip3 install pandas matplotlib
+
+      - name: Generate Python analytics report
+        run: python3 python_analytics/report.py
