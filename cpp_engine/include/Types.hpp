@@ -16,12 +16,14 @@ enum class DecisionType {
 
 struct Tick {
     std::string timestamp;
+    std::string symbol;
     double price{};
     double volume{};
 };
 
 struct Candle {
     std::string timestamp;
+    std::string symbol;
     double open{};
     double high{};
     double low{};
@@ -40,12 +42,15 @@ struct RiskConfig {
     double maxRiskPerTradePct{0.01};
     double maxDailyLossPct{0.03};
     double maxPositionValuePct{0.25};
+    double maxSymbolExposurePct{0.35};
+    double maxPortfolioExposurePct{0.75};
     double stopLossPct{0.004};
     double takeProfitPct{0.008};
 };
 
 struct TradeDecision {
     std::string timestamp;
+    std::string symbol;
     DecisionType decision{DecisionType::REJECTED};
     SignalType signal{SignalType::NONE};
     std::string reason;
@@ -59,6 +64,7 @@ struct TradeDecision {
 
 struct TradeResult {
     std::string timestamp;
+    std::string symbol;
     SignalType side{SignalType::NONE};
     double entryPrice{};
     double exitPrice{};

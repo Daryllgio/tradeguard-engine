@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 #include <stdexcept>
 
 static void assertTrue(bool condition, const std::string& message) {
@@ -15,6 +16,7 @@ static void assertTrue(bool condition, const std::string& message) {
 static Candle candle(double open, double high, double low, double close) {
     return Candle{
         "2026-01-02T09:30:00",
+        "AAPL",
         open,
         high,
         low,
@@ -78,6 +80,36 @@ static void testRiskRejectsMaxDailyLoss() {
     assertTrue(decision.reason.find("max daily loss") != std::string::npos, "Rejection reason should mention max daily loss");
 }
 
+
+static void testRiskRejectsPortfolioExposureLimit() {
+    RiskConfig config;
+    config.accountEquity = 10000.0;
+    config.maxRiskPerTradePct = 0.01;
+    config.maxPositionValuePct = 0.25;
+    config.maxPortfolioExposurePct = 0.30;
+
+    RiskEngine engine(config);
+
+    Signal signal;
+    signal.type = SignalType::LONG;
+    signal.reason = "Bullish momentum continuation";
+    signal.confidence = 0.75;
+
+    std::unordered_map<std::string, double> symbolExposure;
+    symbolExposure["AAPL"] = 1000.0;
+
+    TradeDecision decision = engine.evaluate(
+        candle(100, 102, 99, 100),
+        signal,
+        0.0,
+        2900.0,
+        symbolExposure
+    );
+
+    assertTrue(decision.decision == DecisionType::REJECTED, "RiskEngine should reject portfolio exposure breach");
+    assertTrue(decision.reason.find("portfolio exposure") != std::string::npos, "Reason should mention portfolio exposure");
+}
+
 static void testSignalEngineGeneratesLongMomentum() {
     SignalEngine engine;
     std::vector<Candle> candles;
@@ -115,6 +147,7 @@ int main() {
         testRiskRejectsNoSignal();
         testRiskAcceptsValidLongSignal();
         testRiskRejectsMaxDailyLoss();
+        testRiskRejectsPortfolioExposureLimit();
         testSignalEngineGeneratesLongMomentum();
         testSignalEngineRejectsInsufficientCandles();
 

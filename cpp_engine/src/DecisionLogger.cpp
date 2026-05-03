@@ -18,10 +18,11 @@ void DecisionLogger::writeDecisions(const std::string& path, const std::vector<T
     std::ofstream file(path);
     if (!file.is_open()) throw std::runtime_error("Could not write decisions file: " + path);
 
-    file << "timestamp,decision,signal,reason,entry_price,stop_loss,take_profit,quantity,risk_dollars,notional_value\n";
+    file << "timestamp,symbol,decision,signal,reason,entry_price,stop_loss,take_profit,quantity,risk_dollars,notional_value\n";
 
     for (const auto& d : decisions) {
         file << d.timestamp << ","
+             << d.symbol << ","
              << decisionToString(d.decision) << ","
              << signalToString(d.signal) << ","
              << "\"" << d.reason << "\"" << ","
@@ -38,10 +39,11 @@ void DecisionLogger::writeTrades(const std::string& path, const std::vector<Trad
     std::ofstream file(path);
     if (!file.is_open()) throw std::runtime_error("Could not write trades file: " + path);
 
-    file << "timestamp,side,entry_price,exit_price,quantity,pnl,exit_reason\n";
+    file << "timestamp,symbol,side,entry_price,exit_price,quantity,pnl,exit_reason\n";
 
     for (const auto& t : trades) {
         file << t.timestamp << ","
+             << t.symbol << ","
              << signalToString(t.side) << ","
              << t.entryPrice << ","
              << t.exitPrice << ","

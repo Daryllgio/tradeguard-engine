@@ -15,18 +15,20 @@ std::vector<Tick> MarketData::loadTicksFromCsv(const std::string& path) {
 
     while (std::getline(file, line)) {
         std::stringstream ss(line);
-        std::string timestamp, price, volume;
+        std::string timestamp, symbol, price, volume;
 
         std::getline(ss, timestamp, ',');
+        std::getline(ss, symbol, ',');
         std::getline(ss, price, ',');
         std::getline(ss, volume, ',');
 
-        if (timestamp.empty() || price.empty() || volume.empty()) {
+        if (timestamp.empty() || symbol.empty() || price.empty() || volume.empty()) {
             continue;
         }
 
         ticks.push_back(Tick{
             timestamp,
+            symbol,
             std::stod(price),
             std::stod(volume)
         });

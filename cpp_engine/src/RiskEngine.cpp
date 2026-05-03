@@ -4,9 +4,16 @@
 
 RiskEngine::RiskEngine(RiskConfig config) : config_(config) {}
 
-TradeDecision RiskEngine::evaluate(const Candle& candle, const Signal& signal, double realizedDailyPnl) const {
+TradeDecision RiskEngine::evaluate(
+    const Candle& candle,
+    const Signal& signal,
+    double realizedDailyPnl,
+    double currentPortfolioExposure,
+    const std::unordered_map<std::string, double>& currentSymbolExposure
+) const {
     TradeDecision decision;
     decision.timestamp = candle.timestamp;
+    decision.symbol = candle.symbol;
     decision.signal = signal.type;
     decision.entryPrice = candle.close;
 
@@ -39,9 +46,30 @@ TradeDecision RiskEngine::evaluate(const Candle& candle, const Signal& signal, d
         return decision;
     }
 
+    double proposedNotional = quantity * candle.close;
+
+    double maxPortfolioExposure = config_.accountEquity * config_.maxPortfolioExposurePct;
+    if (currentPortfolioExposure + proposedNotional > maxPortfolioExposure) {
+        decision.reason = "Rejected: portfolio exposure limit exceeded";
+        return decision;
+    }
+
+    double maxSymbolExposure = config_.accountEquity * config_.maxSymbolExposurePct;
+    double symbolExposure = 0.0;
+
+    auto it = currentSymbolExposure.find(candle.symbol);
+    if (it != currentSymbolExposure.end()) {
+        symbolExposure = it->second;
+    }
+
+    if (symbolExposure + proposedNotional > maxSymbolExposure) {
+        decision.reason = "Rejected: symbol exposure limit exceeded";
+        return decision;
+    }
+
     decision.quantity = quantity;
     decision.riskDollars = quantity * stopDistance;
-    decision.notionalValue = quantity * candle.close;
+    decision.notionalValue = proposedNotional;
 
     if (signal.type == SignalType::LONG) {
         decision.stopLoss = candle.close * (1.0 - config_.stopLossPct);

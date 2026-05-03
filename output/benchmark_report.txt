@@ -1,8 +1,8 @@
 # TradeGuard Engine Benchmark Report
 
-Runtime microseconds: 56072
+Runtime microseconds: 53825
 Candles processed: 750
 Decisions logged: 750
-Trades executed: 3
-Average microseconds per candle: 74.7627
-Throughput candles per second: 13375.7
+Trades executed: 2
+Average microseconds per candle: 71.7667
+Throughput candles per second: 13934
