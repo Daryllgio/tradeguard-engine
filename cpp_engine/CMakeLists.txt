@@ -8,8 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include_directories(include)
 
-add_executable(tradeguard
-    src/main.cpp
+set(TRADEGUARD_SOURCES
     src/MarketData.cpp
     src/CandleBuilder.cpp
     src/SignalEngine.cpp
@@ -21,4 +20,19 @@ add_executable(tradeguard
     src/Benchmark.cpp
 )
 
+add_executable(tradeguard
+    src/main.cpp
+    ${TRADEGUARD_SOURCES}
+)
+
+add_executable(tradeguard_tests
+    tests/test_engine.cpp
+    src/SignalEngine.cpp
+    src/RiskEngine.cpp
+)
+
 target_compile_options(tradeguard PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(tradeguard_tests PRIVATE -Wall -Wextra -Wpedantic)
+
+enable_testing()
+add_test(NAME TradeGuardEngineTests COMMAND tradeguard_tests)
