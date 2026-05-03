@@ -18,6 +18,7 @@ add_executable(tradeguard
     src/DecisionLogger.cpp
     src/PerformanceMetrics.cpp
     src/ConfigLoader.cpp
+    src/Benchmark.cpp
 )
 
 target_compile_options(tradeguard PRIVATE -Wall -Wextra -Wpedantic)

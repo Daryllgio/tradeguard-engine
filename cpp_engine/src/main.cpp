@@ -4,6 +4,7 @@
 #include "DecisionLogger.hpp"
 #include "PerformanceMetrics.hpp"
 #include "ConfigLoader.hpp"
+#include "Benchmark.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -42,6 +43,16 @@ int main(int argc, char* argv[]) {
             backtester.equityCurve()
         );
 
+        BenchmarkMetrics benchmark;
+        benchmark.runtimeMicros = micros;
+        benchmark.candlesProcessed = static_cast<int>(candles.size());
+        benchmark.decisionsLogged = static_cast<int>(backtester.decisions().size());
+        benchmark.tradesExecuted = static_cast<int>(backtester.trades().size());
+        benchmark.microsPerCandle = candles.empty() ? 0.0 : static_cast<double>(micros) / static_cast<double>(candles.size());
+        benchmark.candlesPerSecond = micros == 0 ? 0.0 : static_cast<double>(candles.size()) / (static_cast<double>(micros) / 1'000'000.0);
+
+        Benchmark::writeReport(outputDir + "/benchmark_report.txt", benchmark);
+
         std::cout << "TradeGuard Engine completed successfully.\n";
         std::cout << "Config loaded: " << configPath << "\n";
         std::cout << "Account equity: $" << config.accountEquity << "\n";
@@ -56,6 +67,8 @@ int main(int argc, char* argv[]) {
         std::cout << "Win rate: " << metrics.winRate << "%\n";
         std::cout << "Max drawdown: " << metrics.maxDrawdown << "%\n";
         std::cout << "Runtime: " << micros << " microseconds\n";
+        std::cout << "Average latency: " << benchmark.microsPerCandle << " microseconds/candle\n";
+        std::cout << "Throughput: " << benchmark.candlesPerSecond << " candles/second\n";
         std::cout << "Output written to: " << outputDir << "\n";
 
         return 0;
