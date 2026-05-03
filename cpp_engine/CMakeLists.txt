@@ -17,6 +17,7 @@ add_executable(tradeguard
     src/Backtester.cpp
     src/DecisionLogger.cpp
     src/PerformanceMetrics.cpp
+    src/ConfigLoader.cpp
 )
 
 target_compile_options(tradeguard PRIVATE -Wall -Wextra -Wpedantic)
