@@ -104,6 +104,8 @@ int main(int argc, char* argv[]) {
         std::cout << "Total PnL: $" << metrics.totalPnl << "\n";
         std::cout << "Win rate: " << metrics.winRate << "%\n";
         std::cout << "Max drawdown: " << metrics.maxDrawdown << "%\n";
+        DecisionLogger::writeSummaryJson(outputDir + "/summary.json", metrics);
+
         std::cout << "Runtime: " << micros << " microseconds\n";
         std::cout << "Average latency: " << benchmark.microsPerCandle << " microseconds/candle\n";
         std::cout << "Throughput: " << benchmark.candlesPerSecond << " candles/second\n";

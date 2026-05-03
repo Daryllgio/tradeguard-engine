@@ -9,4 +9,7 @@ public:
 
 private:
     double momentum(const std::vector<Candle>& candles, size_t index, int lookback) const;
+    double movingAverage(const std::vector<Candle>& candles, size_t index, int lookback) const;
+    double averageVolume(const std::vector<Candle>& candles, size_t index, int lookback) const;
+    double volatility(const std::vector<Candle>& candles, size_t index, int lookback) const;
 };

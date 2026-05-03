@@ -18,18 +18,21 @@ TradeDecision RiskEngine::evaluate(
     decision.entryPrice = candle.close;
 
     if (signal.type == SignalType::NONE) {
+        decision.reasonCode = DecisionReasonCode::NO_SIGNAL;
         decision.reason = signal.reason;
         return decision;
     }
 
     double maxDailyLoss = config_.accountEquity * config_.maxDailyLossPct;
     if (realizedDailyPnl <= -maxDailyLoss) {
+        decision.reasonCode = DecisionReasonCode::MAX_DAILY_LOSS;
         decision.reason = "Rejected: max daily loss reached";
         return decision;
     }
 
     double stopDistance = candle.close * config_.stopLossPct;
     if (stopDistance <= 0) {
+        decision.reasonCode = DecisionReasonCode::INVALID_STOP_DISTANCE;
         decision.reason = "Rejected: invalid stop distance";
         return decision;
     }
@@ -42,6 +45,7 @@ TradeDecision RiskEngine::evaluate(
     quantity = std::min(quantity, maxQuantityByNotional);
 
     if (quantity <= 0) {
+        decision.reasonCode = DecisionReasonCode::POSITION_TOO_SMALL;
         decision.reason = "Rejected: position size too small under risk limits";
         return decision;
     }
@@ -50,6 +54,7 @@ TradeDecision RiskEngine::evaluate(
 
     double maxPortfolioExposure = config_.accountEquity * config_.maxPortfolioExposurePct;
     if (currentPortfolioExposure + proposedNotional > maxPortfolioExposure) {
+        decision.reasonCode = DecisionReasonCode::PORTFOLIO_EXPOSURE_LIMIT;
         decision.reason = "Rejected: portfolio exposure limit exceeded";
         return decision;
     }
@@ -63,6 +68,7 @@ TradeDecision RiskEngine::evaluate(
     }
 
     if (symbolExposure + proposedNotional > maxSymbolExposure) {
+        decision.reasonCode = DecisionReasonCode::SYMBOL_EXPOSURE_LIMIT;
         decision.reason = "Rejected: symbol exposure limit exceeded";
         return decision;
     }
@@ -80,6 +86,7 @@ TradeDecision RiskEngine::evaluate(
     }
 
     decision.decision = DecisionType::ACCEPTED;
+    decision.reasonCode = DecisionReasonCode::TRADE_ACCEPTED;
     decision.reason = "Accepted: " + signal.reason;
     return decision;
 }

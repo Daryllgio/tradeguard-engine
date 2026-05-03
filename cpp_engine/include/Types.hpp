@@ -14,6 +14,16 @@ enum class DecisionType {
     REJECTED
 };
 
+enum class DecisionReasonCode {
+    TRADE_ACCEPTED,
+    NO_SIGNAL,
+    MAX_DAILY_LOSS,
+    INVALID_STOP_DISTANCE,
+    POSITION_TOO_SMALL,
+    SYMBOL_EXPOSURE_LIMIT,
+    PORTFOLIO_EXPOSURE_LIMIT
+};
+
 struct Tick {
     std::string timestamp;
     std::string symbol;
@@ -52,6 +62,7 @@ struct TradeDecision {
     std::string timestamp;
     std::string symbol;
     DecisionType decision{DecisionType::REJECTED};
+    DecisionReasonCode reasonCode{DecisionReasonCode::NO_SIGNAL};
     SignalType signal{SignalType::NONE};
     std::string reason;
     double entryPrice{};
@@ -71,4 +82,5 @@ struct TradeResult {
     int quantity{};
     double pnl{};
     std::string exitReason;
+    size_t exitIndex{};
 };

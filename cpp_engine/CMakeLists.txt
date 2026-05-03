@@ -29,6 +29,8 @@ add_executable(tradeguard_tests
     tests/test_engine.cpp
     src/SignalEngine.cpp
     src/RiskEngine.cpp
+    src/CandleBuilder.cpp
+    src/ConfigLoader.cpp
 )
 
 target_compile_options(tradeguard PRIVATE -Wall -Wextra -Wpedantic)
