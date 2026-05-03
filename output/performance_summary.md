@@ -29,3 +29,6 @@
 
 - `output/equity_curve.png`
 - `output/pnl_distribution.png`
+- `output/rejection_reasons.png`
+- `output/symbol_pnl.png`
+- `output/symbol_decision_mix.png`
