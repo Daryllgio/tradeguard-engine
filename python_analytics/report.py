@@ -43,12 +43,20 @@ def main():
     plt.close()
 
     plt.figure(figsize=(8, 5))
-    trades["pnl"].plot(kind="hist", bins=20)
-    plt.title("Trade PnL Distribution")
-    plt.xlabel("PnL")
+    if total_trades and "pnl" in trades.columns:
+        trades["pnl"].plot(kind="hist", bins=20)
+        plt.title("Trade PnL Distribution")
+        plt.xlabel("PnL")
+    else:
+        plt.text(0.5, 0.5, "No executed trades", ha="center", va="center")
+        plt.title("Trade PnL Distribution")
+        plt.axis("off")
     plt.tight_layout()
     plt.savefig(OUTPUT / "pnl_distribution.png", dpi=160)
     plt.close()
+
+
+    symbol_summary = trades.groupby("symbol")["pnl"].agg(["count", "sum", "mean"]).reset_index() if total_trades else pd.DataFrame()
 
     rejection_reasons = decisions[decisions["decision"] == "REJECTED"]["reason"].value_counts().head(8)
 
@@ -67,7 +75,14 @@ def main():
         f.write(f"- Worst trade: ${worst_trade:,.2f}\n")
         f.write(f"- Max drawdown: {mdd:.2f}%\n\n")
 
-        f.write("## Top Rejection Reasons\n\n")
+        f.write("## Symbol Performance\n\n")
+        if total_trades:
+            for _, row in symbol_summary.iterrows():
+                f.write(f"- {row['symbol']}: {int(row['count'])} trades, total PnL ${row['sum']:,.2f}, avg PnL ${row['mean']:,.2f}\n")
+        else:
+            f.write("- No trades executed.\n")
+
+        f.write("\n## Top Rejection Reasons\n\n")
         for reason, count in rejection_reasons.items():
             f.write(f"- {reason}: {count}\n")
 
