@@ -288,6 +288,15 @@ function percent(value: number | string) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
 
+
+async function apiPost(path: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE}${path}`, { method: "POST" });
+  } catch (error) {
+    console.error(`POST ${path} failed`, error);
+  }
+}
+
 function App() {
   const [page, setPage] = useState<Page>("overview");
   const [summary, setSummary] = useState<Summary>(fallbackSummary);
@@ -475,6 +484,21 @@ function App() {
 
 
 
+
+  useEffect(() => {
+    apiPost("/api/automation/start");
+
+    const stopAutomation = () => {
+      navigator.sendBeacon?.(`${API_BASE}/api/automation/stop`);
+    };
+
+    window.addEventListener("beforeunload", stopAutomation);
+
+    return () => {
+      window.removeEventListener("beforeunload", stopAutomation);
+      apiPost("/api/automation/stop");
+    };
+  }, []);
 
   const symbols = useMemo(() => {
     return Array.from(new Set(decisions.map((row) => row.symbol).filter(Boolean))).sort();
