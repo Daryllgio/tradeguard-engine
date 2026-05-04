@@ -222,7 +222,7 @@ def broker_execute_latest_signal():
     decisions_data = read_csv(OUTPUT / "decisions.csv")
     accepted = [
         row for row in decisions_data
-        if row.get("decision") == "ACCEPTED" and row.get("signal") in ["LONG", "SHORT"]
+        if row.get("decision") == "ACCEPTED" and row.get("signal") == "LONG"
     ]
 
     if not accepted:
@@ -247,6 +247,93 @@ def broker_execute_latest_signal():
         "source_decision": latest,
         "fill": fill.__dict__,
         "message": "Submitted latest accepted engine signal to Alpaca paper trading.",
+    }
+
+
+@app.post("/api/broker/run-and-execute-signals")
+def broker_run_and_execute_signals():
+    if not ALPACA_BROKER.is_configured():
+        return {
+            "ok": False,
+            "stage": "broker",
+            "message": "Alpaca keys are not configured.",
+        }
+
+    engine_result = run_command([
+        str(ENGINE),
+        str(DATA),
+        str(OUTPUT),
+        str(CONFIG),
+    ])
+
+    LIVE_STATE["last_run_at"] = datetime.utcnow().isoformat()
+
+    if engine_result["returncode"] != 0:
+        return {
+            "ok": False,
+            "stage": "engine",
+            "result": engine_result,
+        }
+
+    report_result = run_command([
+        "python3",
+        "python_analytics/report.py",
+    ])
+
+    if report_result["returncode"] != 0:
+        return {
+            "ok": False,
+            "stage": "analytics",
+            "result": report_result,
+        }
+
+    decisions_data = read_csv(OUTPUT / "decisions.csv")
+    accepted = [
+        row for row in decisions_data
+        if row.get("decision") == "ACCEPTED" and row.get("signal") == "LONG"
+    ]
+
+    # Keep the paper execution capped so one click does not spam paper orders.
+    selected = accepted[-3:]
+
+    fills = []
+    errors = []
+
+    for decision in selected:
+        side = "BUY" if decision.get("signal") == "LONG" else "SELL"
+
+        try:
+            fill = ALPACA_BROKER.submit_order(
+                BrokerOrder(
+                    symbol=str(decision.get("symbol", "AAPL")),
+                    side=side,
+                    quantity=1,
+                )
+            )
+
+            fills.append(
+                {
+                    "source_decision": decision,
+                    "fill": fill.__dict__,
+                }
+            )
+        except Exception as exc:
+            errors.append(
+                {
+                    "source_decision": decision,
+                    "error": str(exc),
+                }
+            )
+
+    return {
+        "ok": len(errors) == 0,
+        "stage": "complete" if len(errors) == 0 else "partial_execution",
+        "accepted_signals_found": len(accepted),
+        "orders_submitted": len(fills),
+        "fills": fills,
+        "errors": errors,
+        "summary": summary(),
+        "message": f"Executed {len(fills)} Alpaca paper BUY orders from accepted LONG engine signals.",
     }
 
 @app.post("/api/run-engine")
