@@ -1,222 +1,149 @@
 # TradeGuard Engine
 
-TradeGuard Engine is a C++20 multi-symbol trading signal and risk engine with a Python analytics layer. It ingests tick-level market data, builds candles, detects confirmed momentum setups, applies risk controls, logs every decision, benchmarks runtime performance, and generates trading performance reports.
+TradeGuard Engine is an automated paper-trading platform that connects a C++ signal/risk engine, a Python analytics layer, a FastAPI backend, a React dashboard, and Alpaca Paper Trading.
 
-## Why This Project Exists
+The platform is designed to show a full trading workflow: market data generation, signal evaluation, risk filtering, order routing, paper execution, portfolio tracking, performance analytics, and live dashboard monitoring.
 
-Trading systems are not just about finding entries. A real decision engine must decide whether a trade should be accepted or rejected based on position size, stop distance, daily loss limits, symbol exposure, portfolio exposure, and execution rules.
+## Live Demo
 
-## Features
+- Frontend Dashboard: https://project-rkyo8.vercel.app
+- Backend API: https://tradeguard-engine.onrender.com/api/health
 
-- Multi-symbol CSV market data ingestion
-- Candle construction from tick streams
-- Momentum signal detection
-- Moving average confirmation
-- Volume confirmation
-- Volatility filter
-- Risk-based position sizing
-- Stop-loss and take-profit calculation
-- Max daily loss protection
-- Symbol exposure limits
-- Portfolio exposure limits
-- Open/closed exposure tracking
-- Structured trade rejection reason codes
-- Backtest simulation
-- Decision, trade, and equity logging
-- Runtime risk configuration through JSON
-- Summary JSON export
-- Latency benchmark report
-- C++ unit tests
-- GitHub Actions CI
-- Python performance analytics
-- Strategy optimization script
+> The dashboard is connected to a live FastAPI backend hosted on Render. Alpaca integration uses paper trading only.
+
+## What TradeGuard Does
+
+TradeGuard simulates and monitors an automated trading system end to end.
+
+When the system is running, it:
+
+1. Generates market input for supported symbols.
+2. Runs the C++ trading engine against the latest market data.
+3. Classifies each setup as accepted or rejected.
+4. Routes accepted paper-trading signals through the backend.
+5. Sends paper orders to Alpaca Paper Trading.
+6. Tracks paper cash, equity, market value, positions, and order history.
+7. Displays performance, risk, strategy, and execution data in a live dashboard.
+
+## Core Features
+
+### Automated Signal Engine
+
+The trading engine evaluates market conditions and produces structured decisions with:
+
+- Symbol
+- Timestamp
+- Long/short signal
+- Entry price
+- Stop loss
+- Take profit
+- Quantity
+- Risk amount
+- Acceptance or rejection reason
+
+### Risk Management
+
+TradeGuard includes a risk layer that evaluates:
+
+- Risk per trade
+- Stop-loss configuration
+- Take-profit configuration
+- Rejection reasons
+- Symbol-level exposure
+- Trade eligibility
+
+### Alpaca Paper Trading Integration
+
+The backend connects to Alpaca Paper Trading and can submit paper market orders from accepted engine signals.
+
+The integration supports:
+
+- Paper account status
+- Buying power
+- Cash and equity
+- Submitted paper orders
+- Broker positions
+- Market snapshots
+
+### Live Dashboard
+
+The dashboard shows:
+
+- Paper equity
+- Unrealized P/L
+- Paper cash
+- Open positions
+- Paper fills
+- Backend cycles
+- Market cycles
+- Signals found
+- Orders submitted
+- Latest paper fills
+- Current paper positions
+- Market input
+- Execution log
+
+### Strategy Lab
+
+The Strategy Lab displays optimization results across different risk, stop-loss, and take-profit configurations.
+
+It ranks strategy settings using:
+
+- Total P/L
+- Ending equity
+- Win rate
+- Max drawdown
+- Strategy score
+
+### Trade Blotter
+
+The Trade Blotter provides a searchable and filterable view of engine decisions and paper-trading activity.
 
 ## Tech Stack
 
-Core Engine: C++20, CMake, STL data structures, config-driven risk engine, file-based market data ingestion, backtesting engine.
+### Frontend
 
-Analytics: Python, pandas, matplotlib.
+- React
+- TypeScript
+- Vite
+- Recharts
+- CSS dashboard UI
 
-DevOps: GitHub Actions CI.
+### Backend
 
-## CLI Usage
+- FastAPI
+- Python
+- Uvicorn
+- Alpaca Paper Trading API
+- Pandas
 
-Show help:
+### Trading Engine
 
-    ./build/tradeguard --help
+- C++
+- CMake
 
-Run the engine:
+### Analytics
 
-    ./build/tradeguard data/sample_ticks.csv output config/risk_config.json
+- Python
+- CSV outputs
+- Strategy optimization
+- Performance summaries
 
-## Run Locally
+### Deployment
 
-Generate sample data:
+- Frontend: Vercel
+- Backend: Render
+- Broker: Alpaca Paper Trading
 
-    python3 python_analytics/generate_sample_data.py
+## Project Structure
 
-Build the C++ engine:
-
-    cmake -S cpp_engine -B build
-    cmake --build build
-
-Run tests:
-
-    ./build/tradeguard_tests
-
-Run the backtest:
-
-    ./build/tradeguard data/sample_ticks.csv output config/risk_config.json
-
-Generate analytics report:
-
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r python_analytics/requirements.txt
-    python python_analytics/report.py
-
-Run strategy optimization:
-
-    python python_analytics/optimize_strategy.py
-
-
-## Dashboard Frontend
-
-A React + TypeScript dashboard is included in the `dashboard/` folder. It connects to the FastAPI backend and visualizes live API data from the latest C++ engine and Python analytics outputs.
-
-Run locally:
-
-    python3 -m http.server 9000
-
-Then open:
-
-    http://localhost:9000/dashboard/
-
-Before opening the dashboard, regenerate engine outputs:
-
-    ./build/tradeguard data/sample_ticks.csv output config/risk_config.json
-    python python_analytics/report.py
-    python python_analytics/optimize_strategy.py
-
-Then copy dashboard data:
-
-    cp output/summary.json dashboard/data/summary.json
-    cp output/benchmark_report.txt dashboard/data/benchmark_report.txt
-    cp output/performance_summary.md dashboard/data/performance_summary.md
-    cp output/decisions.csv dashboard/data/decisions.csv
-    cp output/trades.csv dashboard/data/trades.csv
-    cp output/optimization_results.csv dashboard/data/optimization_results.csv
-
-
-
-## Dynamic Platform Flow
-
-TradeGuard now runs as a local multi-service platform:
-
-    C++20 Engine
-        -> generates decisions, trades, equity curve, benchmark report
-
-    Python Analytics
-        -> generates performance summaries and optimization results
-
-    FastAPI Backend
-        -> exposes engine outputs through API endpoints
-        -> can trigger engine runs and optimization runs
-
-    React TypeScript Dashboard
-        -> visualizes API data
-        -> supports filters, search, Run Engine, and Run Optimization controls
-
-This avoids hardcoded dashboard data and makes the project behave like a real trading operations platform.
-
-## Architecture
-
-TradeGuard is structured as a multi-layer trading operations platform:
-
-    C++20 Trading / Risk Engine
-            |
-            | writes decisions, trades, equity curve, benchmark reports
-            v
-    Python Analytics Layer
-            |
-            | generates reports, charts, optimization results
-            v
-    FastAPI Control API
-            |
-            | serves live endpoints and triggers engine runs
-            v
-    React + TypeScript Dashboard
-
-The broker layer is adapter-based:
-
-    BrokerAdapter
-      - SimulatedBrokerAdapter
-      - AlpacaBrokerAdapter
-
-The system currently runs in simulated paper mode by default. Alpaca paper trading support is adapter-ready but not enabled until API keys are configured.
-
-## API Endpoints
-
-    GET  /api/health
-    GET  /api/summary
-    GET  /api/decisions
-    GET  /api/trades
-    GET  /api/risk
-    GET  /api/optimization
-    GET  /api/benchmark
-    GET  /api/broker
-    GET  /api/live/status
-    POST /api/live/start
-    POST /api/live/stop
-    POST /api/run-engine
-    POST /api/run-optimization
-
-## Run Full Platform Locally
-
-Terminal 1:
-
-    ./run_api.sh
-
-Terminal 2:
-
-    ./run_dashboard.sh
-
-Then open:
-
-    http://localhost:5173/
-
-
-## Output Artifacts
-
-- output/decisions.csv
-- output/trades.csv
-- output/equity_curve.csv
-- output/summary.json
-- output/benchmark_report.txt
-- output/performance_summary.md
-- output/equity_curve.png
-- output/pnl_distribution.png
-- output/rejection_reasons.png
-- output/symbol_pnl.png
-- output/symbol_decision_mix.png
-- output/optimization_results.csv
-
-
-## Implemented Advanced Features
-
-- Multi-symbol market data ingestion
-- Config-driven risk engine
-- Structured trade rejection reason codes
-- Portfolio and symbol exposure controls
-- Open-position exposure tracking
-- Latency benchmark reporting
-- Python analytics reporting
-- Strategy optimization script
-- Lightweight dashboard frontend
-
-## Remaining Future Improvements
-
-- Live WebSocket market data ingestion
-- Order book simulation
-- Multi-session risk reset
-- Slippage and transaction cost modeling
+```text
+tradeguard-engine/
+├── api/                  # FastAPI backend and broker integration
+├── cpp_engine/            # C++ trading engine
+├── python_analytics/      # Reporting and optimization scripts
+├── dashboard/             # React/Vite frontend
+├── config/                # Risk and optimization configs
+├── data/                  # Market input data
+├── output/                # Generated engine, analytics, and paper-trading outputs
+└── README.md
