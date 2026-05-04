@@ -12,18 +12,71 @@ import {
   TrendingUp,
   WalletCards,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+
+function titleizeKey(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/pct/g, "%")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatConfigValue(key: string, value: number) {
+  if (key.includes("pct")) {
+    return `${(value * 100).toFixed(value < 0.01 ? 2 : 1)}%`;
+  }
+
+  if (key.includes("equity") || key.includes("commission")) {
+    return money(value);
+  }
+
+  return String(value);
+}
+
+function getDecisionRows(decisions: DecisionRow[]) {
+  return decisions.length ? decisions : [];
+}
+
+function getRejectionReasonData(decisions: DecisionRow[]) {
+  const counts = new Map<string, number>();
+
+  decisions.forEach((row) => {
+    const decision = String(row.decision || "");
+    const reason = String(row.reason_code || "UNKNOWN");
+
+    if (decision === "REJECTED") {
+      counts.set(reason, (counts.get(reason) || 0) + 1);
+    }
+  });
+
+  return Array.from(counts.entries())
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+}
+
+function getLiveExposureRows(paperState: PaperState) {
+  return Object.values(paperState.positions || {})
+    .map((position) => ({
+      symbol: String(position.symbol || ""),
+      qty: Number(position.qty || 0),
+      avg_price: Number(position.avg_price || 0),
+      current_price: Number(position.current_price || 0),
+      market_value: Number(position.market_value || 0),
+      unrealized_pnl: Number(position.unrealized_pnl || 0),
+    }))
+    .sort((a, b) => b.market_value - a.market_value);
+}
+
+
+function formatSmallPct(value: unknown) {
+  const num = Number(value ?? 0);
+  if (Math.abs(num) < 1) return `${(num * 100).toFixed(2)}%`;
+  return `${num.toFixed(2)}%`;
+}
 
 function formatDateTime(value: unknown) {
   if (!value) return "Waiting...";
@@ -84,13 +137,16 @@ type TradeRow = {
 };
 
 type OptimizationRow = {
-  run: string;
-  total_pnl: number;
-  ending_equity: number;
-  win_rate: number;
-  max_risk_per_trade_pct: number;
-  stop_loss_pct: number;
-  take_profit_pct: number;
+  run?: string;
+  total_pnl?: number;
+  ending_equity?: number;
+  win_rate?: number;
+  risk_per_trade?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  max_drawdown?: number;
+  trades?: number;
+  score?: number;
 };
 
 type RiskData = {
@@ -245,9 +301,9 @@ function App() {
   const [page, setPage] = useState<Page>("overview");
   const [summary, setSummary] = useState<Summary>(fallbackSummary);
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
-  const [trades, setTrades] = useState<TradeRow[]>([]);
+  const [, setTrades] = useState<TradeRow[]>([]);
   const [optimization, setOptimization] = useState<OptimizationRow[]>([]);
-  const [risk, setRisk] = useState<RiskData>({
+  const [, setRisk] = useState<RiskData>({
     config: {},
     reason_counts: {},
     symbol_exposure: {},
@@ -291,6 +347,13 @@ function App() {
     orders: [],
     last_updated_at: null,
   });
+  const [riskConfig, setRiskConfig] = useState<Record<string, number>>({});
+  const [filters, setFilters] = useState({
+    search: "",
+    symbol: "",
+    decision: "",
+    reason: "",
+  });
   const [marketSnapshot, setMarketSnapshot] = useState<MarketSnapshot>({
     configured: false,
     quotes: [],
@@ -305,10 +368,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState("Connecting");
 
-  const [symbolFilter, setSymbolFilter] = useState("ALL");
-  const [decisionFilter, setDecisionFilter] = useState("ALL");
-  const [reasonFilter, setReasonFilter] = useState("ALL");
-  const [searchQuery, setSearchQuery] = useState("");
 
   async function loadData() {
     const [
@@ -327,6 +386,7 @@ function App() {
       automationStatusData,
       marketEngineData,
       paperStateData,
+      configData,
     ] = await Promise.all([
       apiGet<Summary>("/api/summary", fallbackSummary),
       apiGet<DecisionRow[]>("/api/decisions", []),
@@ -381,6 +441,7 @@ function App() {
         orders: [],
         last_updated_at: null,
       }),
+      apiGet<Record<string, number>>("/api/config", {}),
     ]);
 
     setSummary(summaryData);
@@ -398,16 +459,10 @@ function App() {
     setAutomationStatus(automationStatusData);
     setMarketEngineState(marketEngineData);
     setPaperState(paperStateData);
+    setRiskConfig(configData);
     setApiStatus("Connected");
   }
 
-  async function runOptimization() {
-    setLoading(true);
-    const result = await apiPost<{ ok?: boolean }>("/api/run-optimization", { ok: false });
-    await loadData();
-    setApiStatus(result.ok ? "Optimization updated" : "Optimization error");
-    setLoading(false);
-  }
 
   async function startLive() {
     await apiPost("/api/live/start", {});
@@ -472,38 +527,8 @@ function App() {
   }, []);
 
 
-  const rejectionData = useMemo(
-    () =>
-      Object.entries(risk.reason_counts)
-        .map(([reason, count]) => ({ reason, count }))
-        .sort((a, b) => b.count - a.count),
-    [risk]
-  );
 
-  const symbolExposureData = useMemo(
-    () =>
-      Object.entries(risk.symbol_exposure).map(([symbol, exposure]) => ({
-        symbol,
-        exposure,
-      })),
-    [risk]
-  );
 
-  const symbolPnlData = useMemo(() => {
-    const grouped = trades.reduce<Record<string, { symbol: string; pnl: number; trades: number }>>(
-      (acc, row) => {
-        if (!acc[row.symbol]) {
-          acc[row.symbol] = { symbol: row.symbol, pnl: 0, trades: 0 };
-        }
-        acc[row.symbol].pnl += Number(row.pnl || 0);
-        acc[row.symbol].trades += 1;
-        return acc;
-      },
-      {}
-    );
-
-    return Object.values(grouped);
-  }, [trades]);
 
 
   const symbols = useMemo(() => {
@@ -515,12 +540,12 @@ function App() {
   }, [decisions]);
 
   const filteredDecisions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = filters.search.trim().toLowerCase();
 
     return decisions.filter((row) => {
-      const matchesSymbol = symbolFilter === "ALL" || row.symbol === symbolFilter;
-      const matchesDecision = decisionFilter === "ALL" || row.decision === decisionFilter;
-      const matchesReason = reasonFilter === "ALL" || row.reason_code === reasonFilter;
+      const matchesSymbol = !filters.symbol || row.symbol === filters.symbol;
+      const matchesDecision = !filters.decision || row.decision === filters.decision;
+      const matchesReason = !filters.reason || row.reason_code === filters.reason;
 
       const searchable = [
         row.timestamp,
@@ -528,7 +553,6 @@ function App() {
         row.decision,
         row.reason_code,
         row.signal,
-        String(row.notional_value ?? ""),
       ]
         .join(" ")
         .toLowerCase();
@@ -537,29 +561,8 @@ function App() {
 
       return matchesSymbol && matchesDecision && matchesReason && matchesSearch;
     });
-  }, [decisions, symbolFilter, decisionFilter, reasonFilter, searchQuery]);
+  }, [decisions, filters]);
 
-  const filteredTrades = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return trades.filter((row) => {
-      const matchesSymbol = symbolFilter === "ALL" || row.symbol === symbolFilter;
-
-      const searchable = [
-        row.timestamp,
-        row.symbol,
-        row.side,
-        row.exit_reason,
-        String(row.pnl ?? ""),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      const matchesSearch = !query || searchable.includes(query);
-
-      return matchesSymbol && matchesSearch;
-    });
-  }, [trades, symbolFilter, searchQuery]);
 
   const latestDecisions = filteredDecisions.slice(0, 12);
   const topOptimization = optimization.filter((row) => row.run).slice(0, 10);
@@ -863,74 +866,89 @@ function App() {
 
         {page === "risk" && (
           <>
-            <MetricGrid summary={summary} />
+            <section className="risk-hero">
+              <div>
+                <p className="section-label">Risk Center</p>
+                <h3>Live portfolio exposure and engine rejection controls.</h3>
+                <p>
+                  Monitor current paper exposure, rejected trade reasons, and the active
+                  risk configuration used by the C++ signal/risk engine.
+                </p>
+              </div>
 
-            <FilterPanel
-              symbols={symbols}
-              reasonCodes={reasonCodes}
-              symbolFilter={symbolFilter}
-              setSymbolFilter={setSymbolFilter}
-              decisionFilter={decisionFilter}
-              setDecisionFilter={setDecisionFilter}
-              reasonFilter={reasonFilter}
-              setReasonFilter={setReasonFilter}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-            />
-
-            <section className="grid two">
-              <ChartCard title="Rejection Reason Codes" subtitle="Why the risk engine rejected trades.">
-                <ResponsiveContainer width="100%" height={205}>
-                  <BarChart data={rejectionData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis type="number" fontSize={12} stroke="#64748b" />
-                    <YAxis
-                      type="category"
-                      dataKey="reason"
-                      width={160}
-                      fontSize={11}
-                      stroke="#64748b"
-                    />
-                    <Tooltip />
-                    <Bar dataKey="count" barSize={18} fill="#2563eb" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-              <ChartCard title="Symbol Exposure" subtitle="Estimated notional exposure by symbol.">
-                <ResponsiveContainer width="100%" height={205}>
-                  <BarChart data={symbolExposureData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="symbol" fontSize={12} stroke="#64748b" />
-                    <YAxis fontSize={12} stroke="#64748b" />
-                    <Tooltip formatter={(value) => money(Number(value))} />
-                    <Bar dataKey="exposure" barSize={58} fill="#4f46e5" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
+              <div className="risk-health">
+                <span>Risk Engine</span>
+                <strong>{summary.max_drawdown < -10 ? "High Drawdown" : "Operating"}</strong>
+              </div>
             </section>
 
-            <ConfigPanel config={risk.config} />
+            <section className="metrics live-metrics">
+              <InfoCard
+                label="Rejected Decisions"
+                value={(summary.rejected_setups || 0).toLocaleString()}
+                icon={<ShieldCheck size={18} />}
+              />
+              <InfoCard
+                label="Accepted Trades"
+                value={(summary.accepted_trades || 0).toLocaleString()}
+                icon={<TrendingUp size={18} />}
+              />
+              <InfoCard
+                label="Live Exposure"
+                value={money(paperState.market_value || 0)}
+                icon={<WalletCards size={18} />}
+              />
+              <InfoCard
+                label="Max Drawdown"
+                value={percent(summary.max_drawdown || 0)}
+                icon={<Activity size={18} />}
+              />
+            </section>
+
+            <section className="grid two risk-grid">
+              <TableCard
+                title="Rejection Reason Codes"
+                subtitle="Why the risk engine blocked potential trade decisions."
+              >
+                <RejectionReasonTable rows={getRejectionReasonData(getDecisionRows(decisions))} />
+              </TableCard>
+
+              <TableCard
+                title="Live Symbol Exposure"
+                subtitle="Current internal paper exposure by symbol."
+              >
+                <LiveExposureTable rows={getLiveExposureRows(paperState)} />
+              </TableCard>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading centered">
+                <h3>Risk Policy Configuration</h3>
+                <p>Live limits currently enforced by the C++ risk engine.</p>
+              </div>
+
+              <div className="config-grid professional-config">
+                {Object.entries(riskConfig).map(([key, value]) => (
+                  <div key={key} className="config-item">
+                    <span>{titleizeKey(key)}</span>
+                    <strong>{formatConfigValue(key, Number(value))}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
           </>
         )}
 
         {page === "strategy" && (
           <>
-            <section className="hero compact">
-              <div>
+            <section className="strategy-hero-clean">
+              <div className="strategy-hero-inner">
                 <p className="section-label">Strategy Lab</p>
-                <h3>Parameter search across risk, stop-loss, and take-profit settings.</h3>
+                <h3>Latest strategy optimization across risk, stop-loss, and take-profit settings.</h3>
                 <p>
-                  The optimizer runs multiple configurations and ranks the best results using
-                  total PnL, equity, win rate, and drawdown.
+                  TradeGuard displays the latest optimization run, ranking parameter configurations
+                  by return, win rate, drawdown, and overall strategy score.
                 </p>
-              </div>
-
-              <div className="live-controls">
-                <button onClick={runOptimization} disabled={loading}>
-                  <GitBranch size={15} />
-                  {loading ? "Optimizing..." : "Run Optimization"}
-                </button>
               </div>
             </section>
 
@@ -942,42 +960,102 @@ function App() {
 
         {page === "trades" && (
           <>
-            <section className="grid two">
-              <ChartCard title="Symbol PnL" subtitle="Executed trade PnL by symbol.">
-                <ResponsiveContainer width="100%" height={205}>
-                  <BarChart data={symbolPnlData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="symbol" fontSize={12} stroke="#64748b" />
-                    <YAxis fontSize={12} stroke="#64748b" />
-                    <Tooltip formatter={(value) => money(Number(value))} />
-                    <Bar dataKey="pnl" barSize={58} fill="#16a34a" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
+            <section className="trade-hero">
+              <div>
+                <p className="section-label">Trade Blotter</p>
+                <h3>Live paper fills and engine decision history.</h3>
+                <p>
+                  Review internal TradeGuard fills, active paper positions, and the latest
+                  accepted or rejected engine decisions.
+                </p>
+              </div>
 
-              <InfoCard label="Executed Trades" value={summary.executed_trades.toLocaleString()} />
+              <div className="trade-hero-kpis">
+                <div>
+                  <span>Paper Fills</span>
+                  <strong>{(paperState.orders || []).length.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Open Positions</span>
+                  <strong>{Object.keys(paperState.positions || {}).length.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Unrealized P/L</span>
+                  <strong className={(paperState.unrealized_pnl || 0) >= 0 ? "positive" : "negative"}>
+                    {money(paperState.unrealized_pnl || 0)}
+                  </strong>
+                </div>
+              </div>
             </section>
 
-            <FilterPanel
-              symbols={symbols}
-              reasonCodes={reasonCodes}
-              symbolFilter={symbolFilter}
-              setSymbolFilter={setSymbolFilter}
-              decisionFilter={decisionFilter}
-              setDecisionFilter={setDecisionFilter}
-              reasonFilter={reasonFilter}
-              setReasonFilter={setReasonFilter}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-            />
+            <section className="trade-filters">
+              <div className="search-box">
+                <Search size={16} />
+                <input
+                  value={filters.search}
+                  onChange={(event) => setFilters({ ...filters, search: event.target.value })}
+                  placeholder="Search symbol, decision, reason, signal..."
+                />
+              </div>
 
-            <TableCard title="Trade Blotter" subtitle="Executed trades from the latest engine output.">
-              <TradeTable rows={filteredTrades.slice(0, 25)} />
-            </TableCard>
+              <select
+                value={filters.symbol}
+                onChange={(event) => setFilters({ ...filters, symbol: event.target.value })}
+              >
+                <option value="">All symbols</option>
+                {symbols.map((symbol) => (
+                  <option key={symbol} value={symbol}>
+                    {symbol}
+                  </option>
+                ))}
+              </select>
 
-            <TableCard title="Decision Log" subtitle="Accepted and rejected trading decisions.">
-              <DecisionTable rows={filteredDecisions.slice(0, 25)} />
-            </TableCard>
+              <select
+                value={filters.decision}
+                onChange={(event) => setFilters({ ...filters, decision: event.target.value })}
+              >
+                <option value="">All decisions</option>
+                <option value="ACCEPTED">Accepted</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+
+              <select
+                value={filters.reason}
+                onChange={(event) => setFilters({ ...filters, reason: event.target.value })}
+              >
+                <option value="">All reason codes</option>
+                {reasonCodes.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className="secondary compact"
+                onClick={() => setFilters({ search: "", symbol: "", decision: "", reason: "" })}
+              >
+                Clear
+              </button>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading centered">
+                <h3>Latest TradeGuard Paper Fills</h3>
+                <p>Internal paper fills generated from accepted engine signals.</p>
+              </div>
+
+              <PaperOrdersTable rows={(paperState.orders || []).slice(0, 20)} />
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading centered">
+                <h3>Decision Log</h3>
+                <p>Recent accepted and rejected trading decisions from the engine.</p>
+              </div>
+
+              <DecisionTable rows={filteredDecisions.slice(0, 30)} />
+            </section>
           </>
         )}
 
@@ -1003,43 +1081,12 @@ function App() {
   );
 }
 
-function MetricGrid({ summary }: { summary: Summary }) {
-  return (
-    <section className="metrics">
-      <InfoCard label="Total Decisions" value={summary.total_decisions.toLocaleString()} icon={<Activity size={18} />} />
-      <InfoCard label="Executed Trades" value={summary.executed_trades.toLocaleString()} icon={<TrendingUp size={18} />} />
-      <InfoCard label="Ending Equity" value={money(summary.ending_equity)} icon={<WalletCards size={18} />} />
-      <InfoCard label="Max Drawdown" value={percent(summary.max_drawdown)} icon={<ShieldCheck size={18} />} />
-    </section>
-  );
-}
-
 function InfoCard({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
     <article className="info-card">
       <div className="info-icon">{icon || <Activity size={18} />}</div>
       <p>{label}</p>
       <h3>{value}</h3>
-    </article>
-  );
-}
-
-function ChartCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <article className="panel">
-      <div className="panel-heading centered">
-        <h3>{title}</h3>
-        <p>{subtitle}</p>
-      </div>
-      {children}
     </article>
   );
 }
@@ -1070,79 +1117,6 @@ function EmptyState({ message }: { message: string }) {
       <Database size={20} />
       <p>{message}</p>
     </div>
-  );
-}
-
-function FilterPanel({
-  symbols,
-  reasonCodes,
-  symbolFilter,
-  setSymbolFilter,
-  decisionFilter,
-  setDecisionFilter,
-  reasonFilter,
-  setReasonFilter,
-  searchQuery,
-  setSearchQuery,
-}: {
-  symbols: string[];
-  reasonCodes: string[];
-  symbolFilter: string;
-  setSymbolFilter: (value: string) => void;
-  decisionFilter: string;
-  setDecisionFilter: (value: string) => void;
-  reasonFilter: string;
-  setReasonFilter: (value: string) => void;
-  searchQuery: string;
-  setSearchQuery: (value: string) => void;
-}) {
-  return (
-    <section className="filter-panel">
-      <div className="search-box">
-        <Search size={15} />
-        <input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search symbol, reason code, signal, timestamp..."
-        />
-      </div>
-
-      <select value={symbolFilter} onChange={(event) => setSymbolFilter(event.target.value)}>
-        <option value="ALL">All symbols</option>
-        {symbols.map((symbol) => (
-          <option key={symbol} value={symbol}>
-            {symbol}
-          </option>
-        ))}
-      </select>
-
-      <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value)}>
-        <option value="ALL">All decisions</option>
-        <option value="ACCEPTED">Accepted</option>
-        <option value="REJECTED">Rejected</option>
-      </select>
-
-      <select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}>
-        <option value="ALL">All reason codes</option>
-        {reasonCodes.map((reason) => (
-          <option key={reason} value={reason}>
-            {reason}
-          </option>
-        ))}
-      </select>
-
-      <button
-        className="clear-filters"
-        onClick={() => {
-          setSymbolFilter("ALL");
-          setDecisionFilter("ALL");
-          setReasonFilter("ALL");
-          setSearchQuery("");
-        }}
-      >
-        Clear
-      </button>
-    </section>
   );
 }
 
@@ -1187,77 +1161,53 @@ function DecisionTable({ rows }: { rows: DecisionRow[] }) {
   );
 }
 
-function TradeTable({ rows }: { rows: TradeRow[] }) {
-  return (
-    <table>
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Symbol</th>
-          <th>Side</th>
-          <th>Entry</th>
-          <th>Exit</th>
-          <th>Qty</th>
-          <th>PnL</th>
-          <th>Exit Reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 && (
-          <tr>
-            <td colSpan={6}>
-              <EmptyState message="No decision records match the current filters." />
-            </td>
-          </tr>
-        )}
-
-        {rows.map((row, index) => (
-          <tr key={`${row.timestamp}-${row.symbol}-${index}`}>
-            <td>{row.timestamp}</td>
-            <td>{row.symbol}</td>
-            <td>{row.side}</td>
-            <td>{money(row.entry_price)}</td>
-            <td>{money(row.exit_price)}</td>
-            <td>{row.quantity}</td>
-            <td>{money(row.pnl)}</td>
-            <td>{row.exit_reason}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
 function OptimizationTable({ rows }: { rows: OptimizationRow[] }) {
   return (
     <table>
       <thead>
         <tr>
+          <th>Rank</th>
           <th>Run</th>
           <th>Total PnL</th>
           <th>Ending Equity</th>
           <th>Win Rate</th>
+          <th>Max Drawdown</th>
           <th>Risk / Trade</th>
-          <th>Stop</th>
-          <th>Take</th>
+          <th>Stop Loss</th>
+          <th>Take Profit</th>
+          <th>Score</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={row.run}>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={10}>
+              <EmptyState message="No optimization results available." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => (
+          <tr key={row.run || index}>
+            <td>{index + 1}</td>
             <td>{row.run}</td>
-            <td>{money(row.total_pnl)}</td>
-            <td>{money(row.ending_equity)}</td>
-            <td>{percent(row.win_rate)}</td>
-            <td>{row.max_risk_per_trade_pct}</td>
-            <td>{row.stop_loss_pct}</td>
-            <td>{row.take_profit_pct}</td>
+            <td className={Number(row.total_pnl || 0) >= 0 ? "positive" : "negative"}>
+              {money(row.total_pnl ?? 0)}
+            </td>
+            <td>{money(row.ending_equity ?? 0)}</td>
+            <td>{percent(row.win_rate ?? 0)}</td>
+            <td className="negative">{percent(row.max_drawdown ?? 0)}</td>
+            <td>{formatSmallPct(row.risk_per_trade ?? 0)}</td>
+            <td>{formatSmallPct(row.stop_loss ?? 0)}</td>
+            <td>{formatSmallPct(row.take_profit ?? 0)}</td>
+            <td>{String(row.score ?? "—")}</td>
           </tr>
         ))}
       </tbody>
     </table>
   );
 }
+
 
 function MarketSnapshotTable({
   rows,
@@ -1430,6 +1380,86 @@ function ExecutionLogTable({
   );
 }
 
+
+function RejectionReasonTable({
+  rows,
+}: {
+  rows: Array<{ reason: string; count: number }>;
+}) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0) || 1;
+
+  return (
+    <div className="risk-list">
+      {rows.length === 0 && <EmptyState message="No rejected decisions found." />}
+
+      {rows.map((row) => {
+        const share = (row.count / total) * 100;
+
+        return (
+          <div key={row.reason} className="risk-list-row">
+            <div>
+              <strong>{row.reason}</strong>
+              <span>{row.count.toLocaleString()} decisions</span>
+            </div>
+            <div className="risk-bar-wrap">
+              <div className="risk-bar" style={{ width: `${Math.max(share, 4)}%` }} />
+            </div>
+            <em>{share.toFixed(1)}%</em>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LiveExposureTable({
+  rows,
+}: {
+  rows: Array<{
+    symbol: string;
+    qty: number;
+    avg_price: number;
+    current_price: number;
+    market_value: number;
+    unrealized_pnl: number;
+  }>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Qty</th>
+          <th>Current</th>
+          <th>Exposure</th>
+          <th>Unrealized P/L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5}>
+              <EmptyState message="No live symbol exposure yet." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row) => (
+          <tr key={row.symbol}>
+            <td>{row.symbol}</td>
+            <td>{row.qty.toLocaleString()}</td>
+            <td>{money(row.current_price)}</td>
+            <td>{money(row.market_value)}</td>
+            <td className={row.unrealized_pnl >= 0 ? "positive" : "negative"}>
+              {money(row.unrealized_pnl)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function PaperPositionsTable({
   rows,
 }: {
@@ -1509,26 +1539,6 @@ function PaperOrdersTable({
         ))}
       </tbody>
     </table>
-  );
-}
-
-function ConfigPanel({ config }: { config: Record<string, number> }) {
-  return (
-    <section className="panel">
-      <div className="panel-heading centered">
-        <h3>Risk Configuration</h3>
-        <p>Current config loaded from risk_config.json.</p>
-      </div>
-
-      <div className="config-grid">
-        {Object.entries(config).map(([key, value]) => (
-          <div key={key} className="config-item">
-            <span>{key}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
