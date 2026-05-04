@@ -82,7 +82,7 @@ Run strategy optimization:
 
 ## Dashboard Frontend
 
-A lightweight static dashboard is included in the `dashboard/` folder. It visualizes the latest engine outputs, including summary metrics, benchmark results, trade decisions, and optimization results.
+A React + TypeScript dashboard is included in the `dashboard/` folder. It connects to the FastAPI backend and visualizes live API data from the latest C++ engine and Python analytics outputs.
 
 Run locally:
 
@@ -107,6 +107,27 @@ Then copy dashboard data:
     cp output/trades.csv dashboard/data/trades.csv
     cp output/optimization_results.csv dashboard/data/optimization_results.csv
 
+
+
+## Dynamic Platform Flow
+
+TradeGuard now runs as a local multi-service platform:
+
+    C++20 Engine
+        -> generates decisions, trades, equity curve, benchmark report
+
+    Python Analytics
+        -> generates performance summaries and optimization results
+
+    FastAPI Backend
+        -> exposes engine outputs through API endpoints
+        -> can trigger engine runs and optimization runs
+
+    React TypeScript Dashboard
+        -> visualizes API data
+        -> supports filters, search, Run Engine, and Run Optimization controls
+
+This avoids hardcoded dashboard data and makes the project behave like a real trading operations platform.
 
 ## Architecture
 

@@ -7,17 +7,17 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  build-test-and-validate:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ python3 python3-pip
+          sudo apt-get install -y cmake g++ python3 python3-pip nodejs npm
 
       - name: Configure CMake
         run: cmake -S cpp_engine -B build
@@ -28,14 +28,31 @@ jobs:
       - name: Run C++ unit tests
         run: ./build/tradeguard_tests
 
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r python_analytics/requirements.txt
+          pip3 install -r api/requirements.txt
+
+      - name: Validate FastAPI files
+        run: python3 -m py_compile api/main.py api/brokers/*.py
+
       - name: Generate sample market data
         run: python3 python_analytics/generate_sample_data.py
 
       - name: Run TradeGuard Engine
         run: ./build/tradeguard data/sample_ticks.csv output config/risk_config.json
 
-      - name: Install Python analytics dependencies
-        run: pip3 install pandas matplotlib
-
       - name: Generate Python analytics report
         run: python3 python_analytics/report.py
+
+      - name: Run strategy optimization
+        run: python3 python_analytics/optimize_strategy.py
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm install
+
+      - name: Build React TypeScript dashboard
+        working-directory: dashboard
+        run: npm run build
