@@ -156,7 +156,12 @@ app = FastAPI(title="TradeGuard Engine API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://project-rkyo8.vercel.app",
+        "https://project-rkyo8-git-main-daryllgios-projects.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
