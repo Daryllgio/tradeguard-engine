@@ -174,7 +174,7 @@ MARKET_STATE = {
 }
 
 AUTO_EXECUTION_STATE = {
-    "enabled": True,
+    "enabled": False,
     "interval_seconds": 1,
     "last_cycle_at": None,
     "last_result": None,
@@ -729,11 +729,14 @@ def automation_status():
 @app.post("/api/automation/start")
 def automation_start():
     AUTO_EXECUTION_STATE["enabled"] = True
+    AUTO_EXECUTION_STATE["started_by"] = "dashboard_session"
+    AUTO_EXECUTION_STATE["last_session_started_at"] = datetime.utcnow().isoformat()
     return AUTO_EXECUTION_STATE
 
 @app.post("/api/automation/stop")
 def automation_stop():
     AUTO_EXECUTION_STATE["enabled"] = False
+    AUTO_EXECUTION_STATE["last_session_stopped_at"] = datetime.utcnow().isoformat()
     return AUTO_EXECUTION_STATE
 
 @app.on_event("startup")
