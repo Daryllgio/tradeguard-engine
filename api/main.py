@@ -743,6 +743,19 @@ def automation_start():
     AUTO_EXECUTION_STATE["enabled"] = True
     AUTO_EXECUTION_STATE["started_by"] = "dashboard_session"
     AUTO_EXECUTION_STATE["last_session_started_at"] = datetime.utcnow().isoformat()
+
+    try:
+        result = run_engine_and_execute_signals_internal()
+        AUTO_EXECUTION_STATE["last_cycle_at"] = datetime.utcnow().isoformat()
+        AUTO_EXECUTION_STATE["last_result"] = result
+        AUTO_EXECUTION_STATE["cycles_completed"] = AUTO_EXECUTION_STATE.get("cycles_completed", 0) + 1
+    except Exception as exc:
+        AUTO_EXECUTION_STATE["last_result"] = {
+            "ok": False,
+            "stage": "start_cycle",
+            "error": str(exc),
+        }
+
     return AUTO_EXECUTION_STATE
 
 @app.post("/api/automation/stop")
