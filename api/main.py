@@ -184,6 +184,8 @@ AUTO_EXECUTION_STATE = {
     "last_cycle_at": None,
     "last_result": None,
     "cycles_completed": 0,
+    "last_dashboard_heartbeat_at": None,
+    "heartbeat_timeout_seconds": 6,
 }
 
 LIVE_STATE = {
@@ -738,6 +740,17 @@ def paper_state():
 def automation_status():
     return AUTO_EXECUTION_STATE
 
+
+@app.post("/api/automation/heartbeat")
+def automation_heartbeat():
+    AUTO_EXECUTION_STATE["last_dashboard_heartbeat_at"] = datetime.utcnow().isoformat()
+    if not AUTO_EXECUTION_STATE["enabled"]:
+        AUTO_EXECUTION_STATE["enabled"] = True
+        AUTO_EXECUTION_STATE["started_by"] = "dashboard_heartbeat"
+        AUTO_EXECUTION_STATE["last_session_started_at"] = datetime.utcnow().isoformat()
+    AUTO_EXECUTION_STATE["last_dashboard_heartbeat_at"] = datetime.utcnow().isoformat()
+    return AUTO_EXECUTION_STATE
+
 @app.post("/api/automation/start")
 def automation_start():
     AUTO_EXECUTION_STATE["enabled"] = True
@@ -769,6 +782,20 @@ async def start_auto_execution_loop():
     async def loop():
         while True:
             if AUTO_EXECUTION_STATE["enabled"]:
+                last_heartbeat = AUTO_EXECUTION_STATE.get("last_dashboard_heartbeat_at")
+                if last_heartbeat:
+                    heartbeat_age = (datetime.utcnow() - datetime.fromisoformat(last_heartbeat)).total_seconds()
+                    if heartbeat_age > AUTO_EXECUTION_STATE.get("heartbeat_timeout_seconds", 6):
+                        AUTO_EXECUTION_STATE["enabled"] = False
+                        AUTO_EXECUTION_STATE["last_session_stopped_at"] = datetime.utcnow().isoformat()
+                        AUTO_EXECUTION_STATE["last_result"] = {
+                            "ok": True,
+                            "stage": "stopped",
+                            "message": "Automation stopped because dashboard heartbeat expired.",
+                        }
+                        await asyncio.sleep(AUTO_EXECUTION_STATE["interval_seconds"])
+                        continue
+
                 try:
                     result = run_engine_and_execute_signals_internal()
                     AUTO_EXECUTION_STATE["last_cycle_at"] = datetime.utcnow().isoformat()
