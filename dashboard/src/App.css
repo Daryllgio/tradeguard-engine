@@ -1048,3 +1048,27 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+/* Overview final UI cleanup */
+
+.actions {
+  min-height: 32px;
+}
+
+.live-engine-header {
+  margin-bottom: 10px;
+}
+
+.live-engine-header h3 {
+  max-width: 900px;
+}
+
+.live-engine-footer span {
+  color: #475569;
+  font-weight: 650;
+}
+
+td:first-child {
+  color: #334155;
+  font-weight: 600;
+}

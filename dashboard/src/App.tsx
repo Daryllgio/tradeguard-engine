@@ -25,6 +25,26 @@ import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
+function formatDateTime(value: unknown) {
+  if (!value) return "Waiting...";
+
+  const raw = String(value);
+  const date = new Date(raw);
+
+  if (Number.isNaN(date.getTime())) {
+    return raw.replace("T", " ").slice(0, 19);
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+
 type Page = "overview" | "live" | "risk" | "strategy" | "trades" | "system";
 
 type Summary = {
@@ -593,7 +613,7 @@ function App() {
 
           <div className="actions">
             <span className="status">{apiStatus}</span>
-            <span className="auto-status">Dashboard refresh: 1s</span>
+ 
           </div>
         </header>
 
@@ -651,9 +671,7 @@ function App() {
                   <p>Live Engine Activity</p>
                   <h3>{automationStatus.enabled ? "Engine execution is active. The backend checks signals every 1 second and skips duplicate paper orders." : "Auto-execution is currently paused."}</h3>
                 </div>
-                <span className={automationStatus.enabled ? "live-pill active" : "live-pill"}>
-                  {automationStatus.enabled ? "Active" : "Paused"}
-                </span>
+ 
               </div>
 
               <div className="live-engine-grid">
@@ -684,8 +702,8 @@ function App() {
               </div>
 
               <div className="live-engine-footer">
-                <span>Last cycle: {automationStatus.last_cycle_at ? automationStatus.last_cycle_at.slice(0, 19) : "Waiting..."}</span>
-                <span>Last market input: {marketEngineState.last_generated_at ? marketEngineState.last_generated_at.slice(0, 19) : "Waiting..."}</span>
+                <span>Last cycle: {formatDateTime(automationStatus.last_cycle_at)}</span>
+                <span>Last market input: {formatDateTime(marketEngineState.last_generated_at)}</span>
               </div>
             </section>
 
@@ -1314,7 +1332,7 @@ function BrokerOrdersTable({
             <td>{String(row.side || "").replace("OrderSide.", "")}</td>
             <td>{String(row.qty || "")}</td>
             <td>{String(row.status || "").replace("OrderStatus.", "")}</td>
-            <td>{String(row.submitted_at || "").slice(0, 19)}</td>
+            <td>{formatDateTime(row.submitted_at)}</td>
             <td>
               <button
                 className="table-action"
@@ -1399,7 +1417,7 @@ function ExecutionLogTable({
           const fill = (row.fill || {}) as Record<string, unknown>;
           return (
             <tr key={`${String(row.timestamp || "")}-${index}`}>
-              <td>{String(row.timestamp || "").slice(0, 19)}</td>
+              <td>{formatDateTime(row.timestamp)}</td>
               <td>{String(row.type || "")}</td>
               <td>{String(fill.symbol || "")}</td>
               <td>{String(fill.side || "")}</td>
@@ -1481,7 +1499,7 @@ function PaperOrdersTable({
 
         {rows.map((row, index) => (
           <tr key={`${String(row.timestamp || "")}-${index}`}>
-            <td>{String(row.timestamp || "").slice(0, 19)}</td>
+            <td>{formatDateTime(row.timestamp)}</td>
             <td>{String(row.symbol || "")}</td>
             <td>{String(row.side || "")}</td>
             <td>{String(row.qty || "")}</td>
