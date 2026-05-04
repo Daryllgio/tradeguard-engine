@@ -3,3 +3,4 @@ uvicorn
 pandas
 alpaca-py
 python-dotenv
+matplotlib
