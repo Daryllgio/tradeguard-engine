@@ -263,15 +263,6 @@ const fallbackSummary: Summary = {
 };
 
 
-async function apiPost(path: string) {
-  try {
-    await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-    });
-  } catch (error) {
-    console.error(`POST ${path} failed`, error);
-  }
-}
 
 async function apiGet<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -472,29 +463,12 @@ function App() {
     loadData().catch(() => setApiStatus("API offline"));
   }, []);
 
-
   useEffect(() => {
     const id = window.setInterval(() => {
       loadData().catch(() => setApiStatus("API offline"));
     }, 1000);
 
-  
-  useEffect(() => {
-    apiPost("/api/automation/start");
-
-    const stopAutomation = () => {
-      navigator.sendBeacon?.(`${API_BASE}/api/automation/stop`);
-    };
-
-    window.addEventListener("beforeunload", stopAutomation);
-
-    return () => {
-      window.removeEventListener("beforeunload", stopAutomation);
-      apiPost("/api/automation/stop");
-    };
-  }, []);
-
-  return () => window.clearInterval(id);
+    return () => window.clearInterval(id);
   }, []);
 
 
