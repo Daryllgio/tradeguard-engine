@@ -98,7 +98,7 @@ function formatDateTime(value: unknown) {
 }
 
 
-type Page = "overview" | "live" | "risk" | "strategy" | "trades" | "system";
+type Page = "overview" | "risk" | "strategy" | "trades" | "system";
 
 type Summary = {
   total_decisions: number;
@@ -569,7 +569,6 @@ function App() {
 
   const nav = [
     { id: "overview", label: "Overview", icon: <LayoutDashboard size={17} /> },
-    { id: "live", label: "Live Engine", icon: <Activity size={17} /> },
     { id: "risk", label: "Risk Center", icon: <ShieldCheck size={17} /> },
     { id: "strategy", label: "Strategy Lab", icon: <GitBranch size={17} /> },
     { id: "trades", label: "Trade Blotter", icon: <Database size={17} /> },
@@ -753,114 +752,6 @@ function App() {
                 <ExecutionLogTable rows={executionLog.entries.slice(0, 5)} />
               </TableCard>
             </section>
-          </>
-        )}
-
-        {page === "live" && (
-          <>
-            <section className="hero compact">
-              <div>
-                <p className="section-label">Simulated paper mode</p>
-                <h3>{liveStatus.running ? "Engine is marked running." : "Engine is currently stopped."}</h3>
-                <p>
-                  This mode simulates a broker-controlled trading workflow. The Alpaca adapter
-                  is planned but not enabled until paper API keys are configured.
-                </p>
-              </div>
-
-              <div className="live-controls">
-                <button onClick={startLive}>
-                  <Play size={15} />
-                  Start Simulation
-                </button>
-                <button onClick={stopLive} className="danger">
-                  <Square size={15} />
-                  Stop
-                </button>
-              </div>
-            </section>
-
-            <section className="grid two">
-              <InfoCard label="Broker Adapter" value={liveStatus.broker} />
-              <InfoCard label="Last Engine Run" value={liveStatus.last_run_at || "Not run yet"} />
-            </section>
-
-            <section className="panel">
-              <div className="panel-heading centered">
-                <h3>Alpaca Paper Account</h3>
-                <p>Real Alpaca paper-trading account data from the connected broker API.</p>
-              </div>
-
-              <div className="broker-grid">
-                <InfoCard
-                  label="Configured"
-                  value={brokerAccount.alpaca?.configured ? "Yes" : "No"}
-                />
-                <InfoCard
-                  label="Portfolio Value"
-                  value={money(brokerAccount.alpaca?.portfolio_value || 0)}
-                />
-                <InfoCard
-                  label="Buying Power"
-                  value={money(brokerAccount.alpaca?.buying_power || 0)}
-                />
-                <InfoCard
-                  label="Cash"
-                  value={money(brokerAccount.alpaca?.cash || 0)}
-                />
-              </div>
-
-              <div className="broker-actions">
-                <button onClick={submitPaperTestOrder} disabled={loading || !brokerAccount.alpaca?.configured}>
-                  Submit 1 AAPL Paper Order
-                </button>
-                <span>
-                  {brokerAccount.alpaca?.configured
-                    ? `Account ${brokerAccount.alpaca?.account_number || ""} · Orders loaded: ${brokerOrders.orders.length}`
-                    : brokerAccount.alpaca?.message || "Alpaca account is not configured."}
-                </span>
-              </div>
-            </section>
-
-            <section className="grid two">
-              <TableCard title="Live Market Snapshot" subtitle="Latest quote data from Alpaca market data API.">
-                <MarketSnapshotTable rows={marketSnapshot.quotes} />
-              </TableCard>
-
-              <TableCard title="Alpaca Paper Orders" subtitle="Recent orders from the connected Alpaca paper account.">
-                <BrokerOrdersTable rows={brokerOrders.orders} onCancel={cancelBrokerOrder} />
-              </TableCard>
-            </section>
-
-            <div className="broker-actions live-action-row">
-              <button onClick={submitPaperTestOrder} disabled={loading || brokerAccount?.alpaca?.configured !== true}>
-                Submit 1 AAPL Paper Order
-              </button>
-
-              <button onClick={executeLatestEngineSignal} disabled={loading || brokerAccount?.alpaca?.configured !== true}>
-                Execute Latest Engine Signal
-              </button>
-
-              <span>
-                {brokerAccount.alpaca?.configured
-                  ? `Account ${brokerAccount.alpaca?.account_number || ""} · Orders loaded: ${brokerOrders.orders.length}`
-                  : brokerAccount.alpaca?.message || "Alpaca account is not configured."}
-              </span>
-            </div>
-
-            <section className="grid two">
-              <TableCard title="Alpaca Positions" subtitle="Current paper positions from Alpaca.">
-                <BrokerPositionsTable rows={brokerPositions.positions} />
-              </TableCard>
-
-              <TableCard title="Broker Execution Log" subtitle="Persisted broker execution and engine activity history.">
-                <ExecutionLogTable rows={executionLog.entries} />
-              </TableCard>
-            </section>
-
-            <TableCard title="Latest Engine Decisions" subtitle="Most recent generated decision records.">
-              <DecisionTable rows={latestDecisions} />
-            </TableCard>
           </>
         )}
 
