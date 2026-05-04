@@ -116,6 +116,20 @@ type BrokerOrders = {
   orders: Array<Record<string, unknown>>;
 };
 
+type MarketSnapshot = {
+  configured: boolean;
+  quotes: Array<{
+    symbol: string;
+    bid_price: number;
+    ask_price: number;
+    bid_size: number;
+    ask_size: number;
+    timestamp: string;
+  }>;
+  message?: string;
+};
+
+
 
 const fallbackSummary: Summary = {
   total_decisions: 0,
@@ -183,6 +197,10 @@ function App() {
     configured: false,
     orders: [],
   });
+  const [marketSnapshot, setMarketSnapshot] = useState<MarketSnapshot>({
+    configured: false,
+    quotes: [],
+  });
   const [liveStatus, setLiveStatus] = useState<LiveStatus>({
     running: false,
     mode: "SIMULATED_PAPER",
@@ -209,6 +227,7 @@ function App() {
       liveData,
       brokerAccountData,
       brokerOrdersData,
+      marketSnapshotData,
     ] = await Promise.all([
       apiGet<Summary>("/api/summary", fallbackSummary),
       apiGet<DecisionRow[]>("/api/decisions", []),
@@ -228,6 +247,10 @@ function App() {
         configured: false,
         orders: [],
       }),
+      apiGet<MarketSnapshot>("/api/broker/market-snapshot", {
+        configured: false,
+        quotes: [],
+      }),
     ]);
 
     setSummary(summaryData);
@@ -239,6 +262,7 @@ function App() {
     setLiveStatus(liveData);
     setBrokerAccount(brokerAccountData);
     setBrokerOrders(brokerOrdersData);
+    setMarketSnapshot(marketSnapshotData);
     setApiStatus("Connected");
   }
 
@@ -266,6 +290,20 @@ function App() {
   async function stopLive() {
     await apiPost("/api/live/stop", {});
     await loadData();
+  }
+
+  async function executeLatestEngineSignal() {
+    setLoading(true);
+
+    const result = await apiPost<{ ok?: boolean; message?: string }>("/api/broker/execute-latest-signal", {
+      ok: false,
+      message: "Signal execution failed",
+    });
+
+    await loadData();
+
+    setApiStatus(result.ok ? "Engine signal sent to Alpaca" : result.message || "Signal execution failed");
+    setLoading(false);
   }
 
   async function submitPaperTestOrder() {
@@ -585,6 +623,32 @@ function App() {
                 </span>
               </div>
             </section>
+
+            <section className="grid two">
+              <TableCard title="Live Market Snapshot" subtitle="Latest quote data from Alpaca market data API.">
+                <MarketSnapshotTable rows={marketSnapshot.quotes} />
+              </TableCard>
+
+              <TableCard title="Alpaca Paper Orders" subtitle="Recent orders from the connected Alpaca paper account.">
+                <BrokerOrdersTable rows={brokerOrders.orders} />
+              </TableCard>
+            </section>
+
+            <div className="broker-actions live-action-row">
+              <button onClick={submitPaperTestOrder} disabled={loading || brokerAccount?.alpaca?.configured !== true}>
+                Submit 1 AAPL Paper Order
+              </button>
+
+              <button onClick={executeLatestEngineSignal} disabled={loading || brokerAccount?.alpaca?.configured !== true}>
+                Execute Latest Engine Signal
+              </button>
+
+              <span>
+                {brokerAccount.alpaca?.configured
+                  ? `Account ${brokerAccount.alpaca?.account_number || ""} · Orders loaded: ${brokerOrders.orders.length}`
+                  : brokerAccount.alpaca?.message || "Alpaca account is not configured."}
+              </span>
+            </div>
 
             <TableCard title="Latest Engine Decisions" subtitle="Most recent generated decision records.">
               <DecisionTable rows={latestDecisions} />
@@ -983,6 +1047,84 @@ function OptimizationTable({ rows }: { rows: OptimizationRow[] }) {
             <td>{row.max_risk_per_trade_pct}</td>
             <td>{row.stop_loss_pct}</td>
             <td>{row.take_profit_pct}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function MarketSnapshotTable({
+  rows,
+}: {
+  rows: MarketSnapshot["quotes"];
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Bid</th>
+          <th>Ask</th>
+          <th>Bid Size</th>
+          <th>Ask Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5}>
+              <EmptyState message="No Alpaca market snapshot data available." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row) => (
+          <tr key={row.symbol}>
+            <td>{row.symbol}</td>
+            <td>{money(row.bid_price)}</td>
+            <td>{money(row.ask_price)}</td>
+            <td>{row.bid_size}</td>
+            <td>{row.ask_size}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function BrokerOrdersTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Side</th>
+          <th>Qty</th>
+          <th>Status</th>
+          <th>Submitted</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5}>
+              <EmptyState message="No Alpaca paper orders found yet." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => (
+          <tr key={`${String(row.id || "")}-${index}`}>
+            <td>{String(row.symbol || "")}</td>
+            <td>{String(row.side || "").replace("OrderSide.", "")}</td>
+            <td>{String(row.qty || "")}</td>
+            <td>{String(row.status || "").replace("OrderStatus.", "")}</td>
+            <td>{String(row.submitted_at || "").slice(0, 19)}</td>
           </tr>
         ))}
       </tbody>

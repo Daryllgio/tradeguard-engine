@@ -7,6 +7,9 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest
 
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestQuoteRequest
+
 from .base import BrokerAdapter, BrokerFill, BrokerOrder
 
 
@@ -25,10 +28,15 @@ class AlpacaBrokerAdapter(BrokerAdapter):
     def is_configured(self) -> bool:
         return bool(self.api_key and self.secret_key)
 
-    def _client(self) -> TradingClient:
+    def _trading_client(self) -> TradingClient:
         if not self.is_configured():
             raise RuntimeError("Alpaca paper trading keys are not configured.")
         return TradingClient(self.api_key, self.secret_key, paper=self.paper)
+
+    def _data_client(self) -> StockHistoricalDataClient:
+        if not self.is_configured():
+            raise RuntimeError("Alpaca paper trading keys are not configured.")
+        return StockHistoricalDataClient(self.api_key, self.secret_key)
 
     def get_account(self) -> dict:
         if not self.is_configured():
@@ -39,7 +47,7 @@ class AlpacaBrokerAdapter(BrokerAdapter):
                 "message": "Missing ALPACA_API_KEY or ALPACA_SECRET_KEY.",
             }
 
-        account = self._client().get_account()
+        account = self._trading_client().get_account()
 
         return {
             "adapter": self.name,
@@ -59,7 +67,7 @@ class AlpacaBrokerAdapter(BrokerAdapter):
         if not self.is_configured():
             return []
 
-        orders = self._client().get_orders()
+        orders = self._trading_client().get_orders()
         results = []
 
         for order in orders[:limit]:
@@ -77,9 +85,34 @@ class AlpacaBrokerAdapter(BrokerAdapter):
 
         return results
 
-    def submit_order(self, order: BrokerOrder) -> BrokerFill:
-        client = self._client()
+    def get_latest_quotes(self, symbols: list[str]) -> list[dict]:
+        if not self.is_configured():
+            return []
 
+        request = StockLatestQuoteRequest(symbol_or_symbols=symbols)
+        quotes = self._data_client().get_stock_latest_quote(request)
+
+        results = []
+        for symbol in symbols:
+            quote = quotes.get(symbol)
+            if not quote:
+                continue
+
+            results.append(
+                {
+                    "symbol": symbol,
+                    "bid_price": float(quote.bid_price or 0),
+                    "ask_price": float(quote.ask_price or 0),
+                    "bid_size": int(quote.bid_size or 0),
+                    "ask_size": int(quote.ask_size or 0),
+                    "timestamp": str(quote.timestamp),
+                }
+            )
+
+        return results
+
+    def submit_order(self, order: BrokerOrder) -> BrokerFill:
+        client = self._trading_client()
         side = OrderSide.BUY if order.side == "BUY" else OrderSide.SELL
 
         request = MarketOrderRequest(

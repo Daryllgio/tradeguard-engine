@@ -196,6 +196,59 @@ def broker_test_order():
         "message": "Submitted 1-share AAPL market order to Alpaca paper trading.",
     }
 
+
+@app.get("/api/broker/market-snapshot")
+def broker_market_snapshot():
+    if not ALPACA_BROKER.is_configured():
+        return {
+            "configured": False,
+            "quotes": [],
+            "message": "Alpaca keys are not configured.",
+        }
+
+    return {
+        "configured": True,
+        "quotes": ALPACA_BROKER.get_latest_quotes(["AAPL", "MSFT", "NVDA", "TSLA", "SPY"]),
+    }
+
+@app.post("/api/broker/execute-latest-signal")
+def broker_execute_latest_signal():
+    if not ALPACA_BROKER.is_configured():
+        return {
+            "ok": False,
+            "message": "Alpaca keys are not configured.",
+        }
+
+    decisions_data = read_csv(OUTPUT / "decisions.csv")
+    accepted = [
+        row for row in decisions_data
+        if row.get("decision") == "ACCEPTED" and row.get("signal") in ["LONG", "SHORT"]
+    ]
+
+    if not accepted:
+        return {
+            "ok": False,
+            "message": "No accepted LONG/SHORT engine decision available to execute.",
+        }
+
+    latest = accepted[-1]
+    side = "BUY" if latest.get("signal") == "LONG" else "SELL"
+
+    fill = ALPACA_BROKER.submit_order(
+        BrokerOrder(
+            symbol=str(latest.get("symbol", "AAPL")),
+            side=side,
+            quantity=1,
+        )
+    )
+
+    return {
+        "ok": True,
+        "source_decision": latest,
+        "fill": fill.__dict__,
+        "message": "Submitted latest accepted engine signal to Alpaca paper trading.",
+    }
+
 @app.post("/api/run-engine")
 def run_engine():
     engine_result = run_command([
