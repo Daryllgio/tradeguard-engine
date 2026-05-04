@@ -368,6 +368,13 @@ def benchmark():
         return {"text": ""}
     return {"text": path.read_text()}
 
+
+@app.get("/api/config")
+def config():
+    if CONFIG.exists():
+        return json.loads(CONFIG.read_text())
+    return {}
+
 @app.get("/api/risk")
 def risk():
     decisions_data = read_csv(OUTPUT / "decisions.csv")
