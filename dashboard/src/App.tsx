@@ -5,10 +5,8 @@ import {
   Database,
   GitBranch,
   LayoutDashboard,
-  Play,
   Search,
   ShieldCheck,
-  Square,
   TrendingUp,
   WalletCards,
 } from "lucide-react";
@@ -274,15 +272,6 @@ async function apiGet<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-async function apiPost<T>(path: string, fallback: T): Promise<T> {
-  try {
-    const response = await fetch(`${API_BASE}${path}`, { method: "POST" });
-    if (!response.ok) return fallback;
-    return response.json();
-  } catch {
-    return fallback;
-  }
-}
 
 function money(value: number | string) {
   const number = Number(value || 0);
@@ -311,12 +300,12 @@ function App() {
   });
   const [benchmark, setBenchmark] = useState("");
   const [brokerAccount, setBrokerAccount] = useState<BrokerAccount>({});
-  const [brokerOrders, setBrokerOrders] = useState<BrokerOrders>({
+  const [, setBrokerOrders] = useState<BrokerOrders>({
     adapter: "AlpacaBrokerAdapter",
     configured: false,
     orders: [],
   });
-  const [brokerPositions, setBrokerPositions] = useState<BrokerPositions>({
+  const [, setBrokerPositions] = useState<BrokerPositions>({
     adapter: "AlpacaBrokerAdapter",
     configured: false,
     positions: [],
@@ -365,7 +354,6 @@ function App() {
     last_started_at: null,
     last_run_at: null,
   });
-  const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState("Connecting");
 
 
@@ -464,54 +452,10 @@ function App() {
   }
 
 
-  async function startLive() {
-    await apiPost("/api/live/start", {});
-    await loadData();
-  }
 
-  async function stopLive() {
-    await apiPost("/api/live/stop", {});
-    await loadData();
-  }
 
-  async function executeLatestEngineSignal() {
-    setLoading(true);
 
-    const result = await apiPost<{ ok?: boolean; message?: string }>("/api/broker/execute-latest-signal", {
-      ok: false,
-      message: "Signal execution failed",
-    });
 
-    await loadData();
-
-    setApiStatus(result.ok ? "Engine signal sent to Alpaca" : result.message || "Signal execution failed");
-    setLoading(false);
-  }
-
-  async function submitPaperTestOrder() {
-    setLoading(true);
-
-    const result = await apiPost<{ ok?: boolean; message?: string }>("/api/broker/test-order", {
-      ok: false,
-      message: "Order failed",
-    });
-
-    await loadData();
-
-    setApiStatus(result.ok ? "Paper order submitted" : result.message || "Order failed");
-    setLoading(false);
-  }
-
-  async function cancelBrokerOrder(orderId: string) {
-    setLoading(true);
-    const result = await apiPost<{ ok?: boolean; message?: string }>(`/api/broker/orders/${orderId}/cancel`, {
-      ok: false,
-      message: "Cancel failed",
-    });
-    await loadData();
-    setApiStatus(result.ok ? "Cancel request sent" : result.message || "Cancel failed");
-    setLoading(false);
-  }
 
   useEffect(() => {
     loadData().catch(() => setApiStatus("API offline"));
@@ -564,7 +508,6 @@ function App() {
   }, [decisions, filters]);
 
 
-  const latestDecisions = filteredDecisions.slice(0, 12);
   const topOptimization = optimization.filter((row) => row.run).slice(0, 10);
 
   const nav = [
@@ -1132,96 +1075,6 @@ function MarketSnapshotTable({
             <td>{money(row.ask_price)}</td>
             <td>{row.bid_size}</td>
             <td>{row.ask_size}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function BrokerOrdersTable({
-  rows,
-  onCancel,
-}: {
-  rows: Array<Record<string, unknown>>;
-  onCancel: (orderId: string) => void;
-}) {
-  return (
-    <table>
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Side</th>
-          <th>Qty</th>
-          <th>Status</th>
-          <th>Submitted</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 && (
-          <tr>
-            <td colSpan={5}>
-              <EmptyState message="No Alpaca paper orders found yet." />
-            </td>
-          </tr>
-        )}
-
-        {rows.map((row, index) => (
-          <tr key={`${String(row.id || "")}-${index}`}>
-            <td>{String(row.symbol || "")}</td>
-            <td>{String(row.side || "").replace("OrderSide.", "")}</td>
-            <td>{String(row.qty || "")}</td>
-            <td>{String(row.status || "").replace("OrderStatus.", "")}</td>
-            <td>{formatDateTime(row.submitted_at)}</td>
-            <td>
-              <button
-                className="table-action"
-                onClick={() => onCancel(String(row.id || ""))}
-                disabled={!String(row.id || "") || String(row.status || "").includes("CANCELED") || String(row.status || "").includes("FILLED")}
-              >
-                Cancel
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function BrokerPositionsTable({
-  rows,
-}: {
-  rows: Array<Record<string, unknown>>;
-}) {
-  return (
-    <table>
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Qty</th>
-          <th>Side</th>
-          <th>Market Value</th>
-          <th>Unrealized P/L</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 && (
-          <tr>
-            <td colSpan={5}>
-              <EmptyState message="No Alpaca paper positions found." />
-            </td>
-          </tr>
-        )}
-
-        {rows.map((row, index) => (
-          <tr key={`${String(row.symbol || "")}-${index}`}>
-            <td>{String(row.symbol || "")}</td>
-            <td>{String(row.qty || "")}</td>
-            <td>{String(row.side || "")}</td>
-            <td>{money(String(row.market_value || 0))}</td>
-            <td>{money(String(row.unrealized_pl || 0))}</td>
           </tr>
         ))}
       </tbody>
