@@ -489,6 +489,7 @@ function App() {
     let mounted = true;
 
     const startDashboardSession = async () => {
+      setApiStatus("Connected");
       setAutomationStatus((current) => ({
         ...current,
         enabled: true,
@@ -499,9 +500,23 @@ function App() {
       if (mounted) {
         await loadData().catch(() => setApiStatus("API offline"));
       }
+
+      // Fast burst refresh so the recruiter sees activity immediately after opening.
+      const burstTimers = [250, 500, 900, 1300, 1800, 2500, 3500, 5000].map((delay) =>
+        window.setTimeout(() => {
+          if (mounted) {
+            loadData().catch(() => setApiStatus("API offline"));
+          }
+        }, delay)
+      );
+
+      return () => burstTimers.forEach((timer) => window.clearTimeout(timer));
     };
 
-    startDashboardSession();
+    let cleanupBurst: void | (() => void);
+    startDashboardSession().then((cleanup) => {
+      cleanupBurst = cleanup;
+    });
 
     const stopAutomation = () => {
       navigator.sendBeacon?.(`${API_BASE}/api/automation/stop`);
@@ -512,6 +527,7 @@ function App() {
 
     return () => {
       mounted = false;
+      if (cleanupBurst) cleanupBurst();
       window.removeEventListener("beforeunload", stopAutomation);
       window.removeEventListener("pagehide", stopAutomation);
       apiPost("/api/automation/stop");
