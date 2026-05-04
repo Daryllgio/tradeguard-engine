@@ -486,16 +486,34 @@ function App() {
 
 
   useEffect(() => {
-    apiPost("/api/automation/start");
+    let mounted = true;
+
+    const startDashboardSession = async () => {
+      setAutomationStatus((current) => ({
+        ...current,
+        enabled: true,
+      }));
+
+      await apiPost("/api/automation/start");
+
+      if (mounted) {
+        await loadData().catch(() => setApiStatus("API offline"));
+      }
+    };
+
+    startDashboardSession();
 
     const stopAutomation = () => {
       navigator.sendBeacon?.(`${API_BASE}/api/automation/stop`);
     };
 
     window.addEventListener("beforeunload", stopAutomation);
+    window.addEventListener("pagehide", stopAutomation);
 
     return () => {
+      mounted = false;
       window.removeEventListener("beforeunload", stopAutomation);
+      window.removeEventListener("pagehide", stopAutomation);
       apiPost("/api/automation/stop");
     };
   }, []);
