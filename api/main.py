@@ -3,7 +3,7 @@ import json
 import subprocess
 from datetime import datetime
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from api.brokers import AlpacaBrokerAdapter, BrokerOrder, SimulatedBrokerAdapter
 
@@ -12,6 +12,20 @@ OUTPUT = ROOT / "output"
 ENGINE = ROOT / "build" / "tradeguard"
 DATA = ROOT / "data" / "sample_ticks.csv"
 CONFIG = ROOT / "config" / "risk_config.json"
+
+EXECUTION_LOG = OUTPUT / "execution_log.json"
+
+def read_execution_log():
+    if not EXECUTION_LOG.exists():
+        return []
+    return json.loads(EXECUTION_LOG.read_text())
+
+def append_execution_log(entry: dict):
+    log = read_execution_log()
+    log.insert(0, entry)
+    EXECUTION_LOG.write_text(json.dumps(log[:100], indent=2))
+    return log[:100]
+
 
 app = FastAPI(title="TradeGuard Engine API")
 
@@ -250,6 +264,41 @@ def broker_execute_latest_signal():
     }
 
 
+
+@app.get("/api/broker/positions")
+def broker_positions():
+    return {
+        "adapter": ALPACA_BROKER.name,
+        "configured": ALPACA_BROKER.is_configured(),
+        "positions": ALPACA_BROKER.list_positions() if ALPACA_BROKER.is_configured() else [],
+    }
+
+@app.post("/api/broker/orders/{order_id}/cancel")
+def broker_cancel_order(order_id: str):
+    if not ALPACA_BROKER.is_configured():
+        return {
+            "ok": False,
+            "message": "Alpaca keys are not configured.",
+        }
+
+    try:
+        result = ALPACA_BROKER.cancel_order(order_id)
+        append_execution_log({
+            "timestamp": datetime.utcnow().isoformat(),
+            "type": "ORDER_CANCEL",
+            "order_id": order_id,
+            "result": result,
+        })
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.get("/api/execution-log")
+def execution_log():
+    return {
+        "entries": read_execution_log(),
+    }
+
 @app.post("/api/broker/run-and-execute-signals")
 def broker_run_and_execute_signals():
     if not ALPACA_BROKER.is_configured():
@@ -311,12 +360,21 @@ def broker_run_and_execute_signals():
                 )
             )
 
+            execution_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": "ENGINE_SIGNAL_EXECUTION",
+                "source_decision": decision,
+                "fill": fill.__dict__,
+            }
+
             fills.append(
                 {
                     "source_decision": decision,
                     "fill": fill.__dict__,
                 }
             )
+
+            append_execution_log(execution_entry)
         except Exception as exc:
             errors.append(
                 {

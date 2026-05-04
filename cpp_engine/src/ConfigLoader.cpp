@@ -48,6 +48,8 @@ RiskConfig ConfigLoader::loadRiskConfig(const std::string& path) {
     config.maxPortfolioExposurePct = extractNumber(json, "max_portfolio_exposure_pct", config.maxPortfolioExposurePct);
     config.stopLossPct = extractNumber(json, "stop_loss_pct", config.stopLossPct);
     config.takeProfitPct = extractNumber(json, "take_profit_pct", config.takeProfitPct);
+    config.slippagePct = extractNumber(json, "slippage_pct", config.slippagePct);
+    config.commissionPerTrade = extractNumber(json, "commission_per_trade", config.commissionPerTrade);
 
     return config;
 }

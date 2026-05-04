@@ -56,6 +56,8 @@ struct RiskConfig {
     double maxPortfolioExposurePct{0.75};
     double stopLossPct{0.004};
     double takeProfitPct{0.008};
+    double slippagePct{0.0005};
+    double commissionPerTrade{0.0};
 };
 
 struct TradeDecision {

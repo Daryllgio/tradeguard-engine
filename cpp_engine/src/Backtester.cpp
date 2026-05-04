@@ -9,6 +9,13 @@ struct OpenPosition {
     size_t exitIndex{};
 };
 
+static double applyCosts(double pnl, const RiskConfig& config, double entryPrice, double exitPrice, int quantity) {
+    double entrySlippage = entryPrice * config.slippagePct * quantity;
+    double exitSlippage = exitPrice * config.slippagePct * quantity;
+    double totalCosts = entrySlippage + exitSlippage + config.commissionPerTrade;
+    return pnl - totalCosts;
+}
+
 Backtester::Backtester(RiskConfig config)
     : config_(config), riskEngine_(config) {
     equityCurve_.push_back(config_.accountEquity);
@@ -94,6 +101,7 @@ TradeResult Backtester::simulateTrade(const std::vector<Candle>& candles, size_t
                 result.exitReason = "STOP_LOSS";
                 result.exitIndex = i;
                 result.pnl = (result.exitPrice - result.entryPrice) * result.quantity;
+                result.pnl = applyCosts(result.pnl, config_, result.entryPrice, result.exitPrice, result.quantity);
                 return result;
             }
 
@@ -102,6 +110,7 @@ TradeResult Backtester::simulateTrade(const std::vector<Candle>& candles, size_t
                 result.exitReason = "TAKE_PROFIT";
                 result.exitIndex = i;
                 result.pnl = (result.exitPrice - result.entryPrice) * result.quantity;
+                result.pnl = applyCosts(result.pnl, config_, result.entryPrice, result.exitPrice, result.quantity);
                 return result;
             }
         }
@@ -112,6 +121,7 @@ TradeResult Backtester::simulateTrade(const std::vector<Candle>& candles, size_t
                 result.exitReason = "STOP_LOSS";
                 result.exitIndex = i;
                 result.pnl = (result.entryPrice - result.exitPrice) * result.quantity;
+                result.pnl = applyCosts(result.pnl, config_, result.entryPrice, result.exitPrice, result.quantity);
                 return result;
             }
 
@@ -120,6 +130,7 @@ TradeResult Backtester::simulateTrade(const std::vector<Candle>& candles, size_t
                 result.exitReason = "TAKE_PROFIT";
                 result.exitIndex = i;
                 result.pnl = (result.entryPrice - result.exitPrice) * result.quantity;
+                result.pnl = applyCosts(result.pnl, config_, result.entryPrice, result.exitPrice, result.quantity);
                 return result;
             }
         }
@@ -135,6 +146,8 @@ TradeResult Backtester::simulateTrade(const std::vector<Candle>& candles, size_t
     } else {
         result.pnl = (result.entryPrice - result.exitPrice) * result.quantity;
     }
+
+    result.pnl = applyCosts(result.pnl, config_, result.entryPrice, result.exitPrice, result.quantity);
 
     return result;
 }

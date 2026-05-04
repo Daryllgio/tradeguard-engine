@@ -6,5 +6,7 @@
   "max_symbol_exposure_pct": 0.35,
   "max_portfolio_exposure_pct": 0.75,
   "stop_loss_pct": 0.004,
-  "take_profit_pct": 0.008
+  "take_profit_pct": 0.008,
+  "slippage_pct": 0.0005,
+  "commission_per_trade": 0.0
 }

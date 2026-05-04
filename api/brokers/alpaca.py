@@ -85,6 +85,36 @@ class AlpacaBrokerAdapter(BrokerAdapter):
 
         return results
 
+    def list_positions(self) -> list[dict]:
+        if not self.is_configured():
+            return []
+
+        positions = self._trading_client().get_all_positions()
+        results = []
+
+        for position in positions:
+            results.append(
+                {
+                    "symbol": position.symbol,
+                    "qty": str(position.qty),
+                    "side": str(position.side),
+                    "market_value": float(position.market_value or 0),
+                    "cost_basis": float(position.cost_basis or 0),
+                    "unrealized_pl": float(position.unrealized_pl or 0),
+                    "unrealized_plpc": float(position.unrealized_plpc or 0),
+                    "current_price": float(position.current_price or 0),
+                }
+            )
+
+        return results
+
+    def cancel_order(self, order_id: str) -> dict:
+        if not self.is_configured():
+            return {"ok": False, "message": "Alpaca keys are not configured."}
+
+        self._trading_client().cancel_order_by_id(order_id)
+        return {"ok": True, "order_id": order_id, "message": "Cancel request sent."}
+
     def get_latest_quotes(self, symbols: list[str]) -> list[dict]:
         if not self.is_configured():
             return []

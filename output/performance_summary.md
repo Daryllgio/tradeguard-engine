@@ -6,19 +6,19 @@
 - Accepted trades: 5
 - Rejected setups: 745
 - Executed trades: 5
-- Ending equity: $10,012.10
-- Total PnL: $12.07
-- Win rate: 100.00%
-- Average PnL per trade: $2.41
-- Best trade: $6.64
-- Worst trade: $0.07
-- Max drawdown: 0.00%
+- Ending equity: $10,000.10
+- Total PnL: $0.05
+- Win rate: 40.00%
+- Average PnL per trade: $0.01
+- Best trade: $4.24
+- Worst trade: $-2.33
+- Max drawdown: -0.04%
 
 ## Symbol Performance
 
-- AAPL: 3 trades, total PnL $11.03, avg PnL $3.68
-- MSFT: 1 trades, total PnL $0.07, avg PnL $0.07
-- NVDA: 1 trades, total PnL $0.96, avg PnL $0.96
+- AAPL: 3 trades, total PnL $3.82, avg PnL $1.27
+- MSFT: 1 trades, total PnL $-2.33, avg PnL $-2.33
+- NVDA: 1 trades, total PnL $-1.44, avg PnL $-1.44
 
 ## Top Rejection Reasons
 

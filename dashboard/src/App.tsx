@@ -27,7 +27,7 @@ import {
 } from "recharts";
 import "./App.css";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 type Page = "overview" | "live" | "risk" | "strategy" | "trades" | "system";
 
@@ -116,6 +116,17 @@ type BrokerOrders = {
   orders: Array<Record<string, unknown>>;
 };
 
+type BrokerPositions = {
+  adapter: string;
+  configured: boolean;
+  positions: Array<Record<string, unknown>>;
+};
+
+type ExecutionLog = {
+  entries: Array<Record<string, unknown>>;
+};
+
+
 type MarketSnapshot = {
   configured: boolean;
   quotes: Array<{
@@ -197,6 +208,14 @@ function App() {
     configured: false,
     orders: [],
   });
+  const [brokerPositions, setBrokerPositions] = useState<BrokerPositions>({
+    adapter: "AlpacaBrokerAdapter",
+    configured: false,
+    positions: [],
+  });
+  const [executionLog, setExecutionLog] = useState<ExecutionLog>({
+    entries: [],
+  });
   const [marketSnapshot, setMarketSnapshot] = useState<MarketSnapshot>({
     configured: false,
     quotes: [],
@@ -228,6 +247,8 @@ function App() {
       brokerAccountData,
       brokerOrdersData,
       marketSnapshotData,
+      brokerPositionsData,
+      executionLogData,
     ] = await Promise.all([
       apiGet<Summary>("/api/summary", fallbackSummary),
       apiGet<DecisionRow[]>("/api/decisions", []),
@@ -251,6 +272,14 @@ function App() {
         configured: false,
         quotes: [],
       }),
+      apiGet<BrokerPositions>("/api/broker/positions", {
+        adapter: "AlpacaBrokerAdapter",
+        configured: false,
+        positions: [],
+      }),
+      apiGet<ExecutionLog>("/api/execution-log", {
+        entries: [],
+      }),
     ]);
 
     setSummary(summaryData);
@@ -263,6 +292,8 @@ function App() {
     setBrokerAccount(brokerAccountData);
     setBrokerOrders(brokerOrdersData);
     setMarketSnapshot(marketSnapshotData);
+    setBrokerPositions(brokerPositionsData);
+    setExecutionLog(executionLogData);
     setApiStatus("Connected");
   }
 
@@ -320,8 +351,28 @@ function App() {
     setLoading(false);
   }
 
+  async function cancelBrokerOrder(orderId: string) {
+    setLoading(true);
+    const result = await apiPost<{ ok?: boolean; message?: string }>(`/api/broker/orders/${orderId}/cancel`, {
+      ok: false,
+      message: "Cancel failed",
+    });
+    await loadData();
+    setApiStatus(result.ok ? "Cancel request sent" : result.message || "Cancel failed");
+    setLoading(false);
+  }
+
   useEffect(() => {
     loadData().catch(() => setApiStatus("API offline"));
+  }, []);
+
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      loadData().catch(() => setApiStatus("API offline"));
+    }, 15000);
+
+    return () => window.clearInterval(id);
   }, []);
 
   const decisionMix = useMemo(
@@ -630,7 +681,7 @@ function App() {
               </TableCard>
 
               <TableCard title="Alpaca Paper Orders" subtitle="Recent orders from the connected Alpaca paper account.">
-                <BrokerOrdersTable rows={brokerOrders.orders} />
+                <BrokerOrdersTable rows={brokerOrders.orders} onCancel={cancelBrokerOrder} />
               </TableCard>
             </section>
 
@@ -649,6 +700,16 @@ function App() {
                   : brokerAccount.alpaca?.message || "Alpaca account is not configured."}
               </span>
             </div>
+
+            <section className="grid two">
+              <TableCard title="Alpaca Positions" subtitle="Current paper positions from Alpaca.">
+                <BrokerPositionsTable rows={brokerPositions.positions} />
+              </TableCard>
+
+              <TableCard title="Execution Log" subtitle="Persisted engine-to-broker execution history.">
+                <ExecutionLogTable rows={executionLog.entries} />
+              </TableCard>
+            </section>
 
             <TableCard title="Latest Engine Decisions" subtitle="Most recent generated decision records.">
               <DecisionTable rows={latestDecisions} />
@@ -1073,7 +1134,7 @@ function MarketSnapshotTable({
       <tbody>
         {rows.length === 0 && (
           <tr>
-            <td colSpan={5}>
+            <td colSpan={6}>
               <EmptyState message="No Alpaca market snapshot data available." />
             </td>
           </tr>
@@ -1095,8 +1156,10 @@ function MarketSnapshotTable({
 
 function BrokerOrdersTable({
   rows,
+  onCancel,
 }: {
   rows: Array<Record<string, unknown>>;
+  onCancel: (orderId: string) => void;
 }) {
   return (
     <table>
@@ -1107,6 +1170,7 @@ function BrokerOrdersTable({
           <th>Qty</th>
           <th>Status</th>
           <th>Submitted</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody>
@@ -1125,8 +1189,98 @@ function BrokerOrdersTable({
             <td>{String(row.qty || "")}</td>
             <td>{String(row.status || "").replace("OrderStatus.", "")}</td>
             <td>{String(row.submitted_at || "").slice(0, 19)}</td>
+            <td>
+              <button
+                className="table-action"
+                onClick={() => onCancel(String(row.id || ""))}
+                disabled={!String(row.id || "") || String(row.status || "").includes("CANCELED") || String(row.status || "").includes("FILLED")}
+              >
+                Cancel
+              </button>
+            </td>
           </tr>
         ))}
+      </tbody>
+    </table>
+  );
+}
+
+function BrokerPositionsTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Qty</th>
+          <th>Side</th>
+          <th>Market Value</th>
+          <th>Unrealized P/L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5}>
+              <EmptyState message="No Alpaca paper positions found." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => (
+          <tr key={`${String(row.symbol || "")}-${index}`}>
+            <td>{String(row.symbol || "")}</td>
+            <td>{String(row.qty || "")}</td>
+            <td>{String(row.side || "")}</td>
+            <td>{money(String(row.market_value || 0))}</td>
+            <td>{money(String(row.unrealized_pl || 0))}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ExecutionLogTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Symbol</th>
+          <th>Side</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5}>
+              <EmptyState message="No persisted execution log entries yet." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => {
+          const fill = (row.fill || {}) as Record<string, unknown>;
+          return (
+            <tr key={`${String(row.timestamp || "")}-${index}`}>
+              <td>{String(row.timestamp || "").slice(0, 19)}</td>
+              <td>{String(row.type || "")}</td>
+              <td>{String(fill.symbol || "")}</td>
+              <td>{String(fill.side || "")}</td>
+              <td>{String(fill.status || "").replace("OrderStatus.", "")}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
