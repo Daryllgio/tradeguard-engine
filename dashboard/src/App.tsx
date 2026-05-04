@@ -76,6 +76,20 @@ function formatSmallPct(value: unknown) {
   return `${num.toFixed(2)}%`;
 }
 
+
+function formatEngineStage(stage: unknown, enabled: boolean) {
+  if (!enabled) return "Paused";
+  const raw = String(stage || "").toLowerCase();
+
+  if (raw.includes("partial")) return "Broker active";
+  if (raw.includes("complete")) return "Live routing";
+  if (raw.includes("monitor")) return "Monitoring";
+  if (raw.includes("error")) return "Needs review";
+
+  return "Live routing";
+}
+
+
 function formatDateTime(value: unknown) {
   if (!value) return "Waiting...";
 
@@ -701,7 +715,7 @@ function App() {
                 </div>
                 <div>
                   <span>Stage</span>
-                  <strong>{automationStatus.last_result?.stage || "monitoring"}</strong>
+                  <strong>{formatEngineStage(automationStatus.last_result?.stage, automationStatus.enabled)}</strong>
                 </div>
               </div>
 
