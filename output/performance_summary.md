@@ -3,28 +3,27 @@
 ## Core Metrics
 
 - Total decisions: 750
-- Accepted trades: 5
-- Rejected setups: 745
-- Executed trades: 5
-- Ending equity: $10,000.10
-- Total PnL: $0.05
-- Win rate: 40.00%
-- Average PnL per trade: $0.01
-- Best trade: $4.24
-- Worst trade: $-2.33
-- Max drawdown: -0.04%
+- Accepted trades: 4
+- Rejected setups: 746
+- Executed trades: 4
+- Ending equity: $8,956.84
+- Total PnL: $-1,043.16
+- Win rate: 50.00%
+- Average PnL per trade: $-260.79
+- Best trade: $16.08
+- Worst trade: $-1,061.23
+- Max drawdown: -10.59%
 
 ## Symbol Performance
 
-- AAPL: 3 trades, total PnL $3.82, avg PnL $1.27
-- MSFT: 1 trades, total PnL $-2.33, avg PnL $-2.33
-- NVDA: 1 trades, total PnL $-1.44, avg PnL $-1.44
+- AAPL: 4 trades, total PnL $-1,043.16, avg PnL $-260.79
 
 ## Top Rejection Reasons
 
-- No confirmed momentum setup: 730
+- No confirmed momentum setup: 629
+- Rejected: max daily loss reached: 103
 - Not enough candles: 12
-- Rejected: symbol exposure limit exceeded: 3
+- Rejected: symbol exposure limit exceeded: 2
 
 ## Generated Charts
 

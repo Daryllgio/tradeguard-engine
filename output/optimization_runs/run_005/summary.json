@@ -3,11 +3,11 @@
   "accepted_trades": 5,
   "rejected_setups": 745,
   "executed_trades": 5,
-  "ending_equity": 10012.1,
-  "total_pnl": 12.0653,
-  "win_rate": 100,
-  "average_pnl": 2.41306,
-  "best_trade": 6.6384,
-  "worst_trade": 0.068,
-  "max_drawdown": 0
+  "ending_equity": 10000.1,
+  "total_pnl": 0.0513553,
+  "win_rate": 40,
+  "average_pnl": 0.0102711,
+  "best_trade": 4.23968,
+  "worst_trade": -2.33194,
+  "max_drawdown": -0.0376657
 }

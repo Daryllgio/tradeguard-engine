@@ -6,7 +6,6 @@ import {
   GitBranch,
   LayoutDashboard,
   Play,
-  RefreshCw,
   Search,
   ShieldCheck,
   Square,
@@ -17,9 +16,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -126,6 +122,42 @@ type ExecutionLog = {
   entries: Array<Record<string, unknown>>;
 };
 
+type AutomationStatus = {
+  enabled: boolean;
+  interval_seconds: number;
+  last_cycle_at: string | null;
+  cycles_completed: number;
+  last_result?: {
+    ok?: boolean;
+    stage?: string;
+    message?: string;
+    orders_submitted?: number;
+    accepted_signals_found?: number;
+  };
+};
+
+type MarketEngineState = {
+  last_generated_at: string | null;
+  cycle_id: number;
+  symbols: string[];
+  latest_prices: Record<string, number>;
+  rows_generated: number;
+};
+
+type PaperState = {
+  cash: number;
+  equity: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  market_value: number;
+  positions: Record<string, Record<string, unknown>>;
+  orders: Array<Record<string, unknown>>;
+  last_updated_at: string | null;
+};
+
+
+
+
 
 type MarketSnapshot = {
   configured: boolean;
@@ -216,6 +248,29 @@ function App() {
   const [executionLog, setExecutionLog] = useState<ExecutionLog>({
     entries: [],
   });
+  const [automationStatus, setAutomationStatus] = useState<AutomationStatus>({
+    enabled: false,
+    interval_seconds: 10,
+    last_cycle_at: null,
+    cycles_completed: 0,
+  });
+  const [marketEngineState, setMarketEngineState] = useState<MarketEngineState>({
+    last_generated_at: null,
+    cycle_id: 0,
+    symbols: [],
+    latest_prices: {},
+    rows_generated: 0,
+  });
+  const [paperState, setPaperState] = useState<PaperState>({
+    cash: 100000,
+    equity: 100000,
+    realized_pnl: 0,
+    unrealized_pnl: 0,
+    market_value: 0,
+    positions: {},
+    orders: [],
+    last_updated_at: null,
+  });
   const [marketSnapshot, setMarketSnapshot] = useState<MarketSnapshot>({
     configured: false,
     quotes: [],
@@ -249,6 +304,9 @@ function App() {
       marketSnapshotData,
       brokerPositionsData,
       executionLogData,
+      automationStatusData,
+      marketEngineData,
+      paperStateData,
     ] = await Promise.all([
       apiGet<Summary>("/api/summary", fallbackSummary),
       apiGet<DecisionRow[]>("/api/decisions", []),
@@ -280,6 +338,29 @@ function App() {
       apiGet<ExecutionLog>("/api/execution-log", {
         entries: [],
       }),
+      apiGet<AutomationStatus>("/api/automation/status", {
+        enabled: false,
+        interval_seconds: 10,
+        last_cycle_at: null,
+        cycles_completed: 0,
+      }),
+      apiGet<MarketEngineState>("/api/market/status", {
+        last_generated_at: null,
+        cycle_id: 0,
+        symbols: [],
+        latest_prices: {},
+        rows_generated: 0,
+      }),
+      apiGet<PaperState>("/api/paper/state", {
+        cash: 100000,
+        equity: 100000,
+        realized_pnl: 0,
+        unrealized_pnl: 0,
+        market_value: 0,
+        positions: {},
+        orders: [],
+        last_updated_at: null,
+      }),
     ]);
 
     setSummary(summaryData);
@@ -294,15 +375,10 @@ function App() {
     setMarketSnapshot(marketSnapshotData);
     setBrokerPositions(brokerPositionsData);
     setExecutionLog(executionLogData);
+    setAutomationStatus(automationStatusData);
+    setMarketEngineState(marketEngineData);
+    setPaperState(paperStateData);
     setApiStatus("Connected");
-  }
-
-  async function runEngine() {
-    setLoading(true);
-    const result = await apiPost<{ ok?: boolean }>("/api/run-engine", { ok: false });
-    await loadData();
-    setApiStatus(result.ok ? "Updated" : "Engine error");
-    setLoading(false);
   }
 
   async function runOptimization() {
@@ -370,18 +446,11 @@ function App() {
   useEffect(() => {
     const id = window.setInterval(() => {
       loadData().catch(() => setApiStatus("API offline"));
-    }, 15000);
+    }, 1000);
 
     return () => window.clearInterval(id);
   }, []);
 
-  const decisionMix = useMemo(
-    () => [
-      { name: "Accepted", value: summary.accepted_trades },
-      { name: "Rejected", value: summary.rejected_setups },
-    ],
-    [summary]
-  );
 
   const rejectionData = useMemo(
     () =>
@@ -416,13 +485,6 @@ function App() {
     return Object.values(grouped);
   }, [trades]);
 
-  const equityCurve = useMemo(() => {
-    let equity = 10000;
-    return trades.map((trade, index) => {
-      equity += Number(trade.pnl || 0);
-      return { step: index + 1, equity: Number(equity.toFixed(2)) };
-    });
-  }, [trades]);
 
   const symbols = useMemo(() => {
     return Array.from(new Set(decisions.map((row) => row.symbol).filter(Boolean))).sort();
@@ -531,80 +593,144 @@ function App() {
 
           <div className="actions">
             <span className="status">{apiStatus}</span>
-            <button onClick={loadData} className="secondary">
-              <RefreshCw size={15} />
-              Refresh
-            </button>
-            <button onClick={runEngine} disabled={loading}>
-              <Play size={15} />
-              {loading ? "Running..." : "Run Engine"}
-            </button>
+            <span className="auto-status">Dashboard refresh: 1s</span>
           </div>
         </header>
 
         {page === "overview" && (
           <>
-            <section className="hero">
+            <section className="hero live-overview">
               <div>
-                <p className="section-label">Latest run</p>
-                <h3>Multi-symbol paper-trading risk analytics.</h3>
+                <p className="section-label">Live paper trading</p>
+                <h3>Live engine-driven paper trading operations.</h3>
                 <p>
-                  The dashboard is powered by FastAPI endpoints that read outputs generated
-                  by the C++ risk engine and Python analytics layer.
+                  TradeGuard monitors the latest account, order, position, and execution data
+                  through FastAPI. Accepted C++ engine signals are routed through the broker
+                  adapter and submitted to Alpaca paper trading.
                 </p>
               </div>
 
-              <div className="hero-kpis">
+              <div className="hero-kpis centered-kpis">
                 <div>
-                  <span>Total PnL</span>
-                  <strong>{money(summary.total_pnl)}</strong>
+                  <span>Paper Equity</span>
+                  <strong>{money(paperState.equity || 0)}</strong>
                 </div>
                 <div>
-                  <span>Win Rate</span>
-                  <strong>{percent(summary.win_rate)}</strong>
+                  <span>Unrealized P/L</span>
+                  <strong>{money(paperState.unrealized_pnl || 0)}</strong>
                 </div>
               </div>
             </section>
 
-            <MetricGrid summary={summary} />
+            <section className="metrics live-metrics">
+              <InfoCard
+                label="Paper Cash"
+                value={money(paperState.cash || 0)}
+                icon={<WalletCards size={18} />}
+              />
+              <InfoCard
+                label="Open Positions"
+                value={Object.keys(paperState.positions || {}).length.toLocaleString()}
+                icon={<TrendingUp size={18} />}
+              />
+              <InfoCard
+                label="Paper Fills"
+                value={(paperState.orders || []).length.toLocaleString()}
+                icon={<Database size={18} />}
+              />
+              <InfoCard
+                label="Execution Mode"
+                value={brokerAccount.alpaca?.configured ? "Alpaca Paper" : "Offline"}
+                icon={<ShieldCheck size={18} />}
+              />
+            </section>
+
+            <section className="live-engine-panel">
+              <div className="live-engine-header">
+                <div>
+                  <p>Live Engine Activity</p>
+                  <h3>{automationStatus.enabled ? "Engine execution is active. The backend checks signals every 1 second and skips duplicate paper orders." : "Auto-execution is currently paused."}</h3>
+                </div>
+                <span className={automationStatus.enabled ? "live-pill active" : "live-pill"}>
+                  {automationStatus.enabled ? "Active" : "Paused"}
+                </span>
+              </div>
+
+              <div className="live-engine-grid">
+                <div>
+                  <span>Backend Cycles</span>
+                  <strong>{automationStatus.cycles_completed}</strong>
+                </div>
+                <div>
+                  <span>Market Cycle</span>
+                  <strong>{marketEngineState.cycle_id}</strong>
+                </div>
+                <div>
+                  <span>Rows Generated</span>
+                  <strong>{marketEngineState.rows_generated.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Signals Found</span>
+                  <strong>{automationStatus.last_result?.accepted_signals_found ?? 0}</strong>
+                </div>
+                <div>
+                  <span>Orders This Cycle</span>
+                  <strong>{automationStatus.last_result?.orders_submitted ?? 0}</strong>
+                </div>
+                <div>
+                  <span>Stage</span>
+                  <strong>{automationStatus.last_result?.stage || "monitoring"}</strong>
+                </div>
+              </div>
+
+              <div className="live-engine-footer">
+                <span>Last cycle: {automationStatus.last_cycle_at ? automationStatus.last_cycle_at.slice(0, 19) : "Waiting..."}</span>
+                <span>Last market input: {marketEngineState.last_generated_at ? marketEngineState.last_generated_at.slice(0, 19) : "Waiting..."}</span>
+              </div>
+            </section>
+
+            <section className="section-divider">
+              <div>
+                <p>Broker State</p>
+                <h3>Orders, positions, quotes, and execution records from the connected paper account.</h3>
+              </div>
+              <span>Updates when broker state changes</span>
+            </section>
 
             <section className="grid two">
-              <ChartCard title="Decision Mix" subtitle="Accepted versus rejected decisions.">
-                <ResponsiveContainer width="100%" height={210}>
-                  <BarChart data={decisionMix}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="name" fontSize={12} stroke="#64748b" />
-                    <YAxis fontSize={12} stroke="#64748b" />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {decisionMix.map((entry) => (
-                        <Cell
-                          key={entry.name}
-                          fill={entry.name === "Accepted" ? "#16a34a" : "#dc2626"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
+              <TableCard title="Latest TradeGuard Paper Fills" subtitle="Internal paper fills generated from accepted engine signals.">
+                <PaperOrdersTable rows={(paperState.orders || []).slice(0, 5)} />
+              </TableCard>
 
-              <ChartCard title="Equity Curve" subtitle="Portfolio equity across executed trades.">
-                <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={equityCurve}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="step" fontSize={12} stroke="#64748b" />
-                    <YAxis fontSize={12} stroke="#64748b" domain={["auto", "auto"]} />
-                    <Tooltip formatter={(value) => money(Number(value))} />
-                    <Line
-                      type="monotone"
-                      dataKey="equity"
-                      stroke="#2563eb"
-                      strokeWidth={2.5}
-                      dot={{ r: 3 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
+              <TableCard title="TradeGuard Paper Positions" subtitle="Internal paper positions filled by engine-driven execution.">
+                <PaperPositionsTable rows={Object.values(paperState.positions || {}).slice(0, 5)} />
+              </TableCard>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading centered">
+                <h3>Generated Engine Market Input</h3>
+                <p>Fresh tick data regenerated from broker quote snapshots before each engine cycle.</p>
+              </div>
+
+              <div className="generated-market-grid">
+                {Object.entries(marketEngineState.latest_prices).map(([symbol, price]) => (
+                  <div key={symbol} className="generated-market-card">
+                    <span>{symbol}</span>
+                    <strong>{money(price)}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid two">
+              <TableCard title="Broker Quote Snapshot" subtitle="Latest quote snapshot returned by the broker market data feed.">
+                <MarketSnapshotTable rows={marketSnapshot.quotes} />
+              </TableCard>
+
+              <TableCard title="Broker Execution Log" subtitle="Persisted broker execution and engine activity history.">
+                <ExecutionLogTable rows={executionLog.entries.slice(0, 5)} />
+              </TableCard>
             </section>
           </>
         )}
@@ -706,7 +832,7 @@ function App() {
                 <BrokerPositionsTable rows={brokerPositions.positions} />
               </TableCard>
 
-              <TableCard title="Execution Log" subtitle="Persisted engine-to-broker execution history.">
+              <TableCard title="Broker Execution Log" subtitle="Persisted broker execution and engine activity history.">
                 <ExecutionLogTable rows={executionLog.entries} />
               </TableCard>
             </section>
@@ -736,7 +862,7 @@ function App() {
 
             <section className="grid two">
               <ChartCard title="Rejection Reason Codes" subtitle="Why the risk engine rejected trades.">
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={205}>
                   <BarChart data={rejectionData} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis type="number" fontSize={12} stroke="#64748b" />
@@ -748,19 +874,19 @@ function App() {
                       stroke="#64748b"
                     />
                     <Tooltip />
-                    <Bar dataKey="count" fill="#2563eb" radius={[0, 8, 8, 0]} />
+                    <Bar dataKey="count" barSize={18} fill="#2563eb" radius={[0, 8, 8, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
 
               <ChartCard title="Symbol Exposure" subtitle="Estimated notional exposure by symbol.">
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={205}>
                   <BarChart data={symbolExposureData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="symbol" fontSize={12} stroke="#64748b" />
                     <YAxis fontSize={12} stroke="#64748b" />
                     <Tooltip formatter={(value) => money(Number(value))} />
-                    <Bar dataKey="exposure" fill="#4f46e5" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="exposure" barSize={58} fill="#4f46e5" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -800,13 +926,13 @@ function App() {
           <>
             <section className="grid two">
               <ChartCard title="Symbol PnL" subtitle="Executed trade PnL by symbol.">
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={205}>
                   <BarChart data={symbolPnlData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="symbol" fontSize={12} stroke="#64748b" />
                     <YAxis fontSize={12} stroke="#64748b" />
                     <Tooltip formatter={(value) => money(Number(value))} />
-                    <Bar dataKey="pnl" fill="#16a34a" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="pnl" barSize={58} fill="#16a34a" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -1281,6 +1407,88 @@ function ExecutionLogTable({
             </tr>
           );
         })}
+      </tbody>
+    </table>
+  );
+}
+
+function PaperPositionsTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Qty</th>
+          <th>Avg Price</th>
+          <th>Current</th>
+          <th>Market Value</th>
+          <th>Unrealized P/L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={6}>
+              <EmptyState message="No internal paper positions yet." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => (
+          <tr key={`${String(row.symbol || "")}-${index}`}>
+            <td>{String(row.symbol || "")}</td>
+            <td>{String(row.qty || "")}</td>
+            <td>{money(String(row.avg_price || 0))}</td>
+            <td>{money(String(row.current_price || 0))}</td>
+            <td>{money(String(row.market_value || 0))}</td>
+            <td>{money(String(row.unrealized_pnl || 0))}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function PaperOrdersTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>Side</th>
+          <th>Qty</th>
+          <th>Fill</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={6}>
+              <EmptyState message="No internal paper fills yet." />
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, index) => (
+          <tr key={`${String(row.timestamp || "")}-${index}`}>
+            <td>{String(row.timestamp || "").slice(0, 19)}</td>
+            <td>{String(row.symbol || "")}</td>
+            <td>{String(row.side || "")}</td>
+            <td>{String(row.qty || "")}</td>
+            <td>{money(String(row.fill_price || 0))}</td>
+            <td>{String(row.status || "")}</td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );
