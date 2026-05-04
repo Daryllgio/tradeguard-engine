@@ -92,6 +92,31 @@ type LiveStatus = {
   last_run_at: string | null;
 };
 
+type BrokerAccount = {
+  simulated?: Record<string, unknown>;
+  alpaca?: {
+    adapter?: string;
+    mode?: string;
+    configured?: boolean;
+    message?: string;
+    account_number?: string;
+    status?: string;
+    currency?: string;
+    cash?: number;
+    portfolio_value?: number;
+    buying_power?: number;
+    equity?: number;
+    paper?: boolean;
+  };
+};
+
+type BrokerOrders = {
+  adapter: string;
+  configured: boolean;
+  orders: Array<Record<string, unknown>>;
+};
+
+
 const fallbackSummary: Summary = {
   total_decisions: 0,
   accepted_trades: 0,
@@ -152,6 +177,12 @@ function App() {
     total_rejections: 0,
   });
   const [benchmark, setBenchmark] = useState("");
+  const [brokerAccount, setBrokerAccount] = useState<BrokerAccount>({});
+  const [brokerOrders, setBrokerOrders] = useState<BrokerOrders>({
+    adapter: "AlpacaBrokerAdapter",
+    configured: false,
+    orders: [],
+  });
   const [liveStatus, setLiveStatus] = useState<LiveStatus>({
     running: false,
     mode: "SIMULATED_PAPER",
@@ -176,6 +207,8 @@ function App() {
       benchmarkData,
       riskData,
       liveData,
+      brokerAccountData,
+      brokerOrdersData,
     ] = await Promise.all([
       apiGet<Summary>("/api/summary", fallbackSummary),
       apiGet<DecisionRow[]>("/api/decisions", []),
@@ -189,6 +222,12 @@ function App() {
         total_rejections: 0,
       }),
       apiGet<LiveStatus>("/api/live/status", liveStatus),
+      apiGet<BrokerAccount>("/api/broker/account", {}),
+      apiGet<BrokerOrders>("/api/broker/orders", {
+        adapter: "AlpacaBrokerAdapter",
+        configured: false,
+        orders: [],
+      }),
     ]);
 
     setSummary(summaryData);
@@ -198,6 +237,8 @@ function App() {
     setBenchmark(benchmarkData.text);
     setRisk(riskData);
     setLiveStatus(liveData);
+    setBrokerAccount(brokerAccountData);
+    setBrokerOrders(brokerOrdersData);
     setApiStatus("Connected");
   }
 
@@ -225,6 +266,20 @@ function App() {
   async function stopLive() {
     await apiPost("/api/live/stop", {});
     await loadData();
+  }
+
+  async function submitPaperTestOrder() {
+    setLoading(true);
+
+    const result = await apiPost<{ ok?: boolean; message?: string }>("/api/broker/test-order", {
+      ok: false,
+      message: "Order failed",
+    });
+
+    await loadData();
+
+    setApiStatus(result.ok ? "Paper order submitted" : result.message || "Order failed");
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -492,6 +547,43 @@ function App() {
             <section className="grid two">
               <InfoCard label="Broker Adapter" value={liveStatus.broker} />
               <InfoCard label="Last Engine Run" value={liveStatus.last_run_at || "Not run yet"} />
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading centered">
+                <h3>Alpaca Paper Account</h3>
+                <p>Real Alpaca paper-trading account data from the connected broker API.</p>
+              </div>
+
+              <div className="broker-grid">
+                <InfoCard
+                  label="Configured"
+                  value={brokerAccount.alpaca?.configured ? "Yes" : "No"}
+                />
+                <InfoCard
+                  label="Portfolio Value"
+                  value={money(brokerAccount.alpaca?.portfolio_value || 0)}
+                />
+                <InfoCard
+                  label="Buying Power"
+                  value={money(brokerAccount.alpaca?.buying_power || 0)}
+                />
+                <InfoCard
+                  label="Cash"
+                  value={money(brokerAccount.alpaca?.cash || 0)}
+                />
+              </div>
+
+              <div className="broker-actions">
+                <button onClick={submitPaperTestOrder} disabled={loading || !brokerAccount.alpaca?.configured}>
+                  Submit 1 AAPL Paper Order
+                </button>
+                <span>
+                  {brokerAccount.alpaca?.configured
+                    ? `Account ${brokerAccount.alpaca?.account_number || ""} · Orders loaded: ${brokerOrders.orders.length}`
+                    : brokerAccount.alpaca?.message || "Alpaca account is not configured."}
+                </span>
+              </div>
             </section>
 
             <TableCard title="Latest Engine Decisions" subtitle="Most recent generated decision records.">

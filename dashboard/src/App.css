@@ -564,3 +564,43 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+.broker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.broker-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.broker-actions button {
+  border: 0;
+  background: #0f172a;
+  color: white;
+  padding: 8px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.broker-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.broker-actions span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 1050px) {
+  .broker-grid {
+    grid-template-columns: 1fr;
+  }
+}

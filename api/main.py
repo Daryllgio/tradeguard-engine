@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.brokers import AlpacaBrokerAdapter, SimulatedBrokerAdapter
+from api.brokers import AlpacaBrokerAdapter, BrokerOrder, SimulatedBrokerAdapter
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "output"
@@ -156,6 +156,44 @@ def broker():
             "AlpacaBrokerAdapter"
         ],
         "message": "System runs in simulated paper mode by default. Alpaca paper trading can be enabled later with API keys."
+    }
+
+
+@app.get("/api/broker/account")
+def broker_account():
+    return {
+        "simulated": SIM_BROKER.get_account(),
+        "alpaca": ALPACA_BROKER.get_account(),
+    }
+
+@app.get("/api/broker/orders")
+def broker_orders():
+    return {
+        "adapter": ALPACA_BROKER.name,
+        "configured": ALPACA_BROKER.is_configured(),
+        "orders": ALPACA_BROKER.list_orders() if ALPACA_BROKER.is_configured() else [],
+    }
+
+@app.post("/api/broker/test-order")
+def broker_test_order():
+    if not ALPACA_BROKER.is_configured():
+        return {
+            "ok": False,
+            "message": "Alpaca keys are not configured. Add them to .env first.",
+        }
+
+    fill = ALPACA_BROKER.submit_order(
+        BrokerOrder(
+            symbol="AAPL",
+            side="BUY",
+            quantity=1,
+        )
+    )
+
+    return {
+        "ok": True,
+        "fill": fill.__dict__,
+        "message": "Submitted 1-share AAPL market order to Alpaca paper trading.",
     }
 
 @app.post("/api/run-engine")
