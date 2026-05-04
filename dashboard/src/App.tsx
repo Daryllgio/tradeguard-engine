@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Play,
   RefreshCw,
+  Search,
   ShieldCheck,
   Square,
   TrendingUp,
@@ -161,6 +162,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState("Connecting");
 
+  const [symbolFilter, setSymbolFilter] = useState("ALL");
+  const [decisionFilter, setDecisionFilter] = useState("ALL");
+  const [reasonFilter, setReasonFilter] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+
   async function loadData() {
     const [
       summaryData,
@@ -274,7 +280,62 @@ function App() {
     });
   }, [trades]);
 
-  const latestDecisions = decisions.slice(0, 12);
+  const symbols = useMemo(() => {
+    return Array.from(new Set(decisions.map((row) => row.symbol).filter(Boolean))).sort();
+  }, [decisions]);
+
+  const reasonCodes = useMemo(() => {
+    return Array.from(new Set(decisions.map((row) => row.reason_code).filter(Boolean))).sort();
+  }, [decisions]);
+
+  const filteredDecisions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return decisions.filter((row) => {
+      const matchesSymbol = symbolFilter === "ALL" || row.symbol === symbolFilter;
+      const matchesDecision = decisionFilter === "ALL" || row.decision === decisionFilter;
+      const matchesReason = reasonFilter === "ALL" || row.reason_code === reasonFilter;
+
+      const searchable = [
+        row.timestamp,
+        row.symbol,
+        row.decision,
+        row.reason_code,
+        row.signal,
+        String(row.notional_value ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch = !query || searchable.includes(query);
+
+      return matchesSymbol && matchesDecision && matchesReason && matchesSearch;
+    });
+  }, [decisions, symbolFilter, decisionFilter, reasonFilter, searchQuery]);
+
+  const filteredTrades = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return trades.filter((row) => {
+      const matchesSymbol = symbolFilter === "ALL" || row.symbol === symbolFilter;
+
+      const searchable = [
+        row.timestamp,
+        row.symbol,
+        row.side,
+        row.exit_reason,
+        String(row.pnl ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch = !query || searchable.includes(query);
+
+      return matchesSymbol && matchesSearch;
+    });
+  }, [trades, symbolFilter, searchQuery]);
+
+  const latestDecisions = filteredDecisions.slice(0, 12);
   const topOptimization = optimization.filter((row) => row.run).slice(0, 10);
 
   const nav = [
@@ -443,6 +504,19 @@ function App() {
           <>
             <MetricGrid summary={summary} />
 
+            <FilterPanel
+              symbols={symbols}
+              reasonCodes={reasonCodes}
+              symbolFilter={symbolFilter}
+              setSymbolFilter={setSymbolFilter}
+              decisionFilter={decisionFilter}
+              setDecisionFilter={setDecisionFilter}
+              reasonFilter={reasonFilter}
+              setReasonFilter={setReasonFilter}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+            />
+
             <section className="grid two">
               <ChartCard title="Rejection Reason Codes" subtitle="Why the risk engine rejected trades.">
                 <ResponsiveContainer width="100%" height={220}>
@@ -523,12 +597,25 @@ function App() {
               <InfoCard label="Executed Trades" value={summary.executed_trades.toLocaleString()} />
             </section>
 
+            <FilterPanel
+              symbols={symbols}
+              reasonCodes={reasonCodes}
+              symbolFilter={symbolFilter}
+              setSymbolFilter={setSymbolFilter}
+              decisionFilter={decisionFilter}
+              setDecisionFilter={setDecisionFilter}
+              reasonFilter={reasonFilter}
+              setReasonFilter={setReasonFilter}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+            />
+
             <TableCard title="Trade Blotter" subtitle="Executed trades from the latest engine output.">
-              <TradeTable rows={trades.slice(0, 20)} />
+              <TradeTable rows={filteredTrades.slice(0, 25)} />
             </TableCard>
 
             <TableCard title="Decision Log" subtitle="Accepted and rejected trading decisions.">
-              <DecisionTable rows={latestDecisions} />
+              <DecisionTable rows={filteredDecisions.slice(0, 25)} />
             </TableCard>
           </>
         )}
@@ -616,6 +703,88 @@ function TableCard({
   );
 }
 
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="empty-state">
+      <Database size={20} />
+      <p>{message}</p>
+    </div>
+  );
+}
+
+function FilterPanel({
+  symbols,
+  reasonCodes,
+  symbolFilter,
+  setSymbolFilter,
+  decisionFilter,
+  setDecisionFilter,
+  reasonFilter,
+  setReasonFilter,
+  searchQuery,
+  setSearchQuery,
+}: {
+  symbols: string[];
+  reasonCodes: string[];
+  symbolFilter: string;
+  setSymbolFilter: (value: string) => void;
+  decisionFilter: string;
+  setDecisionFilter: (value: string) => void;
+  reasonFilter: string;
+  setReasonFilter: (value: string) => void;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+}) {
+  return (
+    <section className="filter-panel">
+      <div className="search-box">
+        <Search size={15} />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search symbol, reason code, signal, timestamp..."
+        />
+      </div>
+
+      <select value={symbolFilter} onChange={(event) => setSymbolFilter(event.target.value)}>
+        <option value="ALL">All symbols</option>
+        {symbols.map((symbol) => (
+          <option key={symbol} value={symbol}>
+            {symbol}
+          </option>
+        ))}
+      </select>
+
+      <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value)}>
+        <option value="ALL">All decisions</option>
+        <option value="ACCEPTED">Accepted</option>
+        <option value="REJECTED">Rejected</option>
+      </select>
+
+      <select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value)}>
+        <option value="ALL">All reason codes</option>
+        {reasonCodes.map((reason) => (
+          <option key={reason} value={reason}>
+            {reason}
+          </option>
+        ))}
+      </select>
+
+      <button
+        className="clear-filters"
+        onClick={() => {
+          setSymbolFilter("ALL");
+          setDecisionFilter("ALL");
+          setReasonFilter("ALL");
+          setSearchQuery("");
+        }}
+      >
+        Clear
+      </button>
+    </section>
+  );
+}
+
 function DecisionTable({ rows }: { rows: DecisionRow[] }) {
   return (
     <table>
@@ -630,6 +799,14 @@ function DecisionTable({ rows }: { rows: DecisionRow[] }) {
         </tr>
       </thead>
       <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={6}>
+              <EmptyState message="No decision records match the current filters." />
+            </td>
+          </tr>
+        )}
+
         {rows.map((row, index) => (
           <tr key={`${row.timestamp}-${row.symbol}-${index}`}>
             <td>{row.timestamp}</td>
@@ -665,6 +842,14 @@ function TradeTable({ rows }: { rows: TradeRow[] }) {
         </tr>
       </thead>
       <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={6}>
+              <EmptyState message="No decision records match the current filters." />
+            </td>
+          </tr>
+        )}
+
         {rows.map((row, index) => (
           <tr key={`${row.timestamp}-${row.symbol}-${index}`}>
             <td>{row.timestamp}</td>
