@@ -1,0 +1,13 @@
+{
+  "total_decisions": 750,
+  "accepted_trades": 5,
+  "rejected_setups": 745,
+  "executed_trades": 5,
+  "ending_equity": 10012.1,
+  "total_pnl": 12.0653,
+  "win_rate": 100,
+  "average_pnl": 2.41306,
+  "best_trade": 6.6384,
+  "worst_trade": 0.068,
+  "max_drawdown": 0
+}
